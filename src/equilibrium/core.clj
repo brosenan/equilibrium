@@ -10,9 +10,10 @@
            `(defn ~funcname [~@args]
               (list '~(symbol (str *ns*) (str ctor "#" (count args))) ~@args))))))
 
-(defn- variable? [x]
+(defn variable? [x]
   (and (symbol? x)
-       (str/starts-with? (name x) "?")))
+       (or (Character/isUpperCase (first (name x)))
+           (= (first (name x)) \_))))
 
 (defn canonical-symbol [form]
   (let [[sym & args] form]

@@ -3,13 +3,21 @@
             [equilibrium.core :as eq :refer [+#2 *#2]]))
 
 
+;; # Variables
+
+;; Variables are symbols that begin with a capital letter or an underscore.
+(fact
+ (eq/variable? 'Foo) => true
+ (eq/variable? '_) => true
+ (eq/variable? 'foo) => false)
+
 ;; # Constructors
 
 ;; The macro eq/data defines a constructor. Constructors are
 ;; self-evaluating functions, i.e., functions that evaluate to
 ;; themselves. The macro takes any number of forms, each consisting of
 ;; a name and example arguments.
-(eq/data (list ?val ?next)
+(eq/data (list Val Next)
          (empty))
 
 ;; Each such form defines a Clojure function that returns the original
@@ -36,14 +44,14 @@
 
 ;; When the left-hand-side is a form, a function of the same name is
 ;; being defined. When the first argument to that form is a variable
-;; (a symbol starting with `?`), the equation defines a _uniform
-;; function_.
+;; (a symbol starting with a capital letter or an underscore), the
+;; equation defines a _uniform function_.
 
 ;; The Clojure function being defined receives a suffix that includes
 ;; a hash sign (`#`) followed by the function's arity (number of
 ;; arguments). This is to say that functions of the same name but
 ;; different arities are distinct.
-(eq/= (f ?x) (+ ?x 2))
+(eq/= (f X) (+ X 2))
 (fact
  (f#1 3) => 5)
 
@@ -53,7 +61,7 @@
 ;; - A _code_ atom (with the `-code` suffix), containing a vector of two elements -- the s-expressions on the two sides of the equation, and
 ;; - A _compiled_ atom (with the `-comp` suffix), containing a closure with the function definition.
 (fact
- @f#1-code => '[(f ?x) (+ ?x 2)]
+ @f#1-code => '[(f X) (+ X 2)]
  @f#1-comp => fn?
  (@f#1-comp 4) => 6)
 
@@ -62,7 +70,7 @@
 ;; `-comp` suffix) is merely a proxy. If the function in the atom gets
 ;; updated, the meaning of the function changes.
 (fact
- (reset! f#1-comp (fn [?x] (- ?x 2)))
+ (reset! f#1-comp (fn [X] (- X 2)))
  (f#1 3) => 1)
 
 ;; ## Polimorphic Functions
@@ -70,7 +78,7 @@
 ;; Polymorphic functions are defined across multiple equations, each
 ;; contributing a solution for the case where the first argument is of
 ;; a specific constructor.
-(eq/= (sum (list ?v ?r)) (+ ?v (sum ?r)))
+(eq/= (sum (list V R)) (+ V (sum R)))
 (eq/= (sum (empty)) 0)
 (fact
  (sum#1 (list#2 1 (list#2 2 (empty#0)))) => 3)
@@ -86,7 +94,7 @@
 (fact
  @sum#1-code => map?
  @sum#1-comp => map?
- (@sum#1-code 'equilibrium.core-test/list#2) => '[(sum (list ?v ?r)) (+ ?v (sum ?r))]
+ (@sum#1-code 'equilibrium.core-test/list#2) => '[(sum (list V R)) (+ V (sum R))]
  (@sum#1-comp 'equilibrium.core-test/list#2) => fn?)
 
 ;; # Under the Hood
@@ -141,11 +149,11 @@
 
 ;; It operates on a sequence of arguments. If all are valid variables, they are returned as a Clojure vector.
 (fact
- (eq/lhs-to-clj '(?a ?b ?c)) => '[?a ?b ?c])
+ (eq/lhs-to-clj '(A B C)) => '[A B C])
 
 ;; Literals and non-variable symbols are replaced with dummy variables. Nested sequences are taken as vectors.
 (fact
- (eq/lhs-to-clj '(1 "two" (three ?four 5))) => '[$1 $2 [$3 ?four $5]]
+ (eq/lhs-to-clj '(1 "two" (three Four 5))) => '[$1 $2 [$3 Four $5]]
  (provided
   (rand-int 1000000000) =streams=> [1 2 3 5]))
 
@@ -161,9 +169,9 @@
 ;; tail recursion (the last operation it performs is `+`, which is
 ;; performed after the recursion is complete), The following
 ;; alternative definition does use tail recursion:
-(eq/= (tre-sum (list ?v ?l) ?s) (tre-sum ?l (+ ?s ?v)))
-(eq/= (tre-sum (empty) ?s) ?s)
-(eq/= (tre-sum ?l) (tre-sum ?l 0))
+(eq/= (tre-sum (list V L) S) (tre-sum L (+ S V)))
+(eq/= (tre-sum (empty) S) S)
+(eq/= (tre-sum L) (tre-sum L 0))
 
 ;; The `tre` function takes an Equilibrium right-hand expression and a
 ;; canonical symbol representing the function this expression defines,
@@ -173,12 +181,12 @@
 ;; not the given one, a `:return` tuple is returned, with the original
 ;; expression as the return value.
 (fact
- (eq/tre '(+ ?v (sum ?r)) 'equilibrium.core-test/sum#1) => '(equilibrium.core/return (+ ?v (sum ?r))))
+ (eq/tre '(+ V (sum R)) 'equilibrium.core-test/sum#1) => '(equilibrium.core/return (+ V (sum R))))
 
 ;; If the top-level is a call to the given function, a `:recur` tuple
 ;; is returned, with the arguments to call on the next iteration.
 (fact
- (eq/tre '(tre-sum ?l (+ ?s ?v)) 'equilibrium.core-test/tre-sum#2) => '(equilibrium.core/recur [?l (+ ?s ?v)]))
+ (eq/tre '(tre-sum L (+ S V)) 'equilibrium.core-test/tre-sum#2) => '(equilibrium.core/recur [L (+ S V)]))
 
 ;; So by calling `tre-sum` we get the same result as we would for
 ;; `sum`, only that no recursion is involved.
