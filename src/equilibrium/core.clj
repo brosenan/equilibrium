@@ -105,7 +105,23 @@
           ;; else
           (polymorphic-func a b name))))))
 
-(defmacro abstract [form & eqs])
+(defmacro abstract [form & eqs]
+  (let [[sym & args] form]
+    `(def ~(symbol (str sym "#" (count args)))
+       (with-meta '~(for [[a b] eqs]
+                      [(canonicalize a) (canonicalize b)])
+         {:abstract true}))))
+
+(defn find-abstract-components
+  ([expr] (find-abstract-components expr []))
+  ([expr addr]
+   (cond
+     (not (seq? expr)) []
+     (let [sym (first expr)]
+       (-> sym resolve deref meta :abstract)) [addr]
+     :else (mapcat (fn [[i elem]]
+                     (find-abstract-components elem (conj addr i)))
+                   (map-indexed vector expr)))))
 
 ;; Standatd library
 (defn +#2 [a b]

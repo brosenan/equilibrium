@@ -153,7 +153,32 @@
 
 ;; ### Under the Hood
 
-;; Abstract concepts define 
+;; Abstract concepts are represented as variables containing the
+;; sequence of equations defined for them. The equations are
+;; canonicalized to make them valid across namespaces.
+(fact
+ lambda#2 => ['[(equilibrium.core-test/apply#2 (equilibrium.core-test/lambda#2 X Y) X) Y]])
+
+;; The abstract concept has a `:abstract` meta attribute to make it
+;; easy to identify as abstract.
+(fact
+ (-> lambda#2 meta :abstract) => true)
+
+;; The function `find-abstract-components` takes a canonical
+;; expression and returns a sequence of indicies in which abstract
+;; concepts are located within that expression.
+
+;; If no abstract concepts are present, it returns an empty sequence.
+(fact
+ (eq/find-abstract-components (eq/canonicalize '(eq/+ 1 2))) => [])
+
+;; For each abstract concept, it returns a vector of indecies that
+;; leads to it.
+(fact
+ (eq/find-abstract-components (eq/canonicalize '(list (lambda N (eq/+ N 1))
+                                                        (list (lambda N (eq/+ N -1))
+                                                                (empty)))))
+ => [[1] [2 1]])
 
 ;; # Under the Hood
 
@@ -176,8 +201,9 @@
 
 ;; ## canonicalize
 
-;; This function compiles an Equilibrium s-expression into a valie
-;; Clojure one.
+;; This function converts symbols in an s-expression to their
+;; canonical form. In many cases, this will make the expression a
+;; valid Clojure expression.
 
 ;; Literals are kept unchanged.
 (fact
