@@ -31,17 +31,17 @@
             (throw (Exception. (str "Symbol " sym " cannot be resolved for arity " arity " in " (meta form)))))
           (symbol (str ns) name-arity))))))
 
-(declare to-clj)
+(declare canonicalize)
 
-(defn- form-to-clj [form]
+(defn- form-canonicalize [form]
   (let [[sym & args] form]
     (cond
-      (= sym 'if) (cons 'if (map to-clj args))
+      (= sym 'if) (cons 'if (map canonicalize args))
       :else
-      (cons (canonical-symbol form) (map to-clj args)))))
+      (cons (canonical-symbol form) (map canonicalize args)))))
 
-(defn to-clj [x]
-  (cond (seq? x) (form-to-clj x)
+(defn canonicalize [x]
+  (cond (seq? x) (form-canonicalize x)
         :else x))
 
 (defn lhs-to-clj [pattern]
@@ -66,7 +66,7 @@
 (defn- uniform-func [a b name]
   `(do
      (def ~(name "-code") (atom '~[a b]))
-     (def ~(name "-comp") (atom (fn [~@(lhs-to-clj (rest a))] ~(to-clj b))))
+     (def ~(name "-comp") (atom (fn [~@(lhs-to-clj (rest a))] ~(canonicalize b))))
      (defn ~(name "") [~@(rest a)] ~(cons `(deref ~(name "-comp")) (rest a)))))
 
 (defn- polymorphic-func [a b name]
@@ -88,10 +88,10 @@
                      (= op# 'equilibrium.core/recur#1)
                      (let [~dummy-args val#]
                        (recur ~@dummy-args))))))))
-       (swap! ~(name "-code") assoc '~(-> a second to-clj first) '~[a b])
-       (swap! ~(name "-comp") assoc '~(-> a second to-clj first)
+       (swap! ~(name "-code") assoc '~(-> a second canonicalize first) '~[a b])
+       (swap! ~(name "-comp") assoc '~(-> a second canonicalize first)
               (fn ~(lhs-to-clj (rest a))
-                ~(-> b (tre (canonical-symbol a)) to-clj))))))
+                ~(-> b (tre (canonical-symbol a)) canonicalize))))))
 
 (defn- eq [a b]
   (if (symbol? a)
@@ -104,6 +104,8 @@
           (uniform-func a b name)
           ;; else
           (polymorphic-func a b name))))))
+
+(defmacro abstract [form & eqs])
 
 ;; Standatd library
 (defn +#2 [a b]

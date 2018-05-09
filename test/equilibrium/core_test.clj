@@ -97,6 +97,63 @@
  (@sum#1-code 'equilibrium.core-test/list#2) => '[(sum (list V R)) (+ V (sum R))]
  (@sum#1-comp 'equilibrium.core-test/list#2) => fn?)
 
+;; # Abstract constructors
+
+;; While Equilibrium resembles functional programming languages, it
+;; does not have a concept of functions in the sense they exist, e.g.,
+;; in Clojure. Instead, equations provide the meaning of expressions directly.
+
+;; While a function does not exist as a concept, it can be
+;; defined. Specifically, we can define closures by specifying how
+;; they are applied.
+
+;; For example, we can define the `apply` function, and define how
+;; different "functions" are applied:
+(eq/data (inc) (dec))
+(eq/= (apply (inc) X) (+ X 1))
+(eq/= (apply (dec) X) (+ X -1))
+
+;; Now, we can apply these functions to values. This will behave as we expect.
+(fact
+ (apply#2 (inc#0) 2) => 3
+ (apply#2 (dec#0) 2) => 1)
+
+;; Here, `(inc)` and `(dec)` behave like true functions, in the sense
+;; functions are given in functional programming. They are values, and
+;; can be passed along to other functions. However, there is something
+;; a bit awkward there. We had do define them through the eyes of the
+;; `apply` function, and moreover, we needed to name them. This is
+;; unlike lambda abstractions, which could have made these functions
+;; anonimous. For example, instead of using `(inc)`, why couldn't we
+;; use something like `(lambda N (+ N 1))`?
+
+;; Well, we can. But to do so, we need to first define `lambda`, as an
+;; `abstract` concept, and provide the equation(s) that define its meaning.
+(eq/abstract (lambda X Y)
+             [(apply (lambda X Y) X) Y])
+
+;; The reason why we need `lambda` to be abstract, and not simple
+;; `data`, is because we expect `X` to be bound to a free variable,
+;; like `N` in the above example. This variable will be introduced at
+;; the right-hand-side of an equation. Because Equilibrium focuses on
+;; compiling its code to efficient Clojure code, new variables cannot
+;; be introduced at the right-hand-side of an equation (the body of a
+;; function), _unless they are introduced within an abstract concept_.
+
+;; In the `abstract` form, we provide the new abstract form (`(lambda
+;; X Y)`, in our case), and any number of equations that define its
+;; meaning. In our case, we provided one equation (given as a 2-tuple)
+;; defining how a `lambda` is to be applied. Note that `X` and `Y`
+;; appear twice (each) in this equation. Having a variable apear more
+;; than once means it shares a value. First, we share the parameter
+;; value given to `apply` with the argument in `lambda`. Then, we bind
+;; the expression defining the function's value to the value returned
+;; by `apply`.
+
+;; ### Under the Hood
+
+;; Abstract concepts define 
+
 ;; # Under the Hood
 
 ;; ## canonical-symbol
@@ -116,35 +173,35 @@
 (fact
  (eq/canonical-symbol '(+ 1 2 3)) => (throws #"Symbol [+] cannot be resolved for arity 3 in .*"))
 
-;; ## to-clj
+;; ## canonicalize
 
 ;; This function compiles an Equilibrium s-expression into a Clojure
 ;; one.
 
 ;; Literals are kept unchanged.
 (fact
- (eq/to-clj 3) => 3
- (eq/to-clj "foo") => "foo")
+ (eq/canonicalize 3) => 3
+ (eq/canonicalize "foo") => "foo")
 
 ;; In forms (sequences that begin with a symbol), a `#` followed by
 ;; the arity (number of args) is appended to the symbol. A full
 ;; namespace is extracted based on resolution.
 (fact
- (eq/to-clj '(+ 1 2)) => '(equilibrium.core/+#2 1 2))
+ (eq/canonicalize '(+ 1 2)) => '(equilibrium.core/+#2 1 2))
 
-;; to-clj works recursively.
+;; canonicalize works recursively.
 (fact
- (eq/to-clj '(+ (* 1 2) 3)) => '(equilibrium.core/+#2 (equilibrium.core/*#2 1 2) 3))
+ (eq/canonicalize '(+ (* 1 2) 3)) => '(equilibrium.core/+#2 (equilibrium.core/*#2 1 2) 3))
 
 ;; ### Special forms
 
 ;; The `if` form translates to a Clojure `if` form.
 (fact
- (eq/to-clj '(if true (+ 1 2) 3)) => '(if true (equilibrium.core/+#2 1 2) 3))
+ (eq/canonicalize '(if true (+ 1 2) 3)) => '(if true (equilibrium.core/+#2 1 2) 3))
 
 ;; ## lhs-to-clj
 
-;; Unlike to-clj, which translates right-hand-side expressions (i.e.,
+;; Unlike canonicalize, which translates right-hand-side expressions (i.e.,
 ;; values), lhs-to-clj translates left-hand-side patterns.
 
 ;; It operates on a sequence of arguments. If all are valid variables, they are returned as a Clojure vector.
