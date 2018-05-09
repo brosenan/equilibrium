@@ -170,15 +170,34 @@
 
 ;; If no abstract concepts are present, it returns an empty sequence.
 (fact
- (eq/find-abstract-components (eq/canonicalize '(eq/+ 1 2))) => [])
+ (eq/find-abstract-components (eq/canonicalize
+                               '(eq/+ 1 2))) => [])
 
 ;; For each abstract concept, it returns a vector of indecies that
 ;; leads to it.
 (fact
- (eq/find-abstract-components (eq/canonicalize '(list (lambda N (eq/+ N 1))
-                                                        (list (lambda N (eq/+ N -1))
-                                                                (empty)))))
+ (eq/find-abstract-components (eq/canonicalize
+                               '(list (lambda N (eq/+ N 1))
+                                      (list (lambda N (eq/+ N -1))
+                                            (empty)))))
  => [[1] [2 1]])
+
+;; The function `vars-in-expr` traverses an expression and returns a
+;; set containing all the variables within that expression.
+(fact
+ (eq/vars-in-expr (eq/canonicalize
+                   '(apply (lambda X Y) X))) => #{'X 'Y})
+
+;; The function `external-vars` take an expression and a path to a
+;; sub-expression. It returns the set of variables that appear both
+;; inside and outside the sub-expression. In the following example,
+;; the sub-expression is `(lambda X Y)`. It uses both X and Y, but Y
+;; is not shared with the larger expression.
+(fact
+ (eq/external-vars (eq/canonicalize
+                    '(apply (lambda X Y) X)) [1]) => #{'X})
+
+;; The function `replace-abstract` replaces abstract concepts with newly-created concrete constructors. The constructors take 
 
 ;; # Under the Hood
 

@@ -1,5 +1,7 @@
 (ns equilibrium.core
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [clojure.walk :as walk]
+            [clojure.set :as set]))
 
 (def ^:dynamic *curr-func*)
 
@@ -122,6 +124,39 @@
      :else (mapcat (fn [[i elem]]
                      (find-abstract-components elem (conj addr i)))
                    (map-indexed vector expr)))))
+
+(defn vars-in-expr [expr]
+  (walk/postwalk (fn [x]
+                   (cond
+                     (variable? x) #{x}
+                     (seq? x) (apply set/union x)
+                     :else #{})) expr))
+
+(defn- at-path [expr path]
+  (if (empty? path)
+    expr
+    ;; else
+    (recur (nth expr (first path)) (rest path))))
+
+(defn- update-at-nth [seq n val]
+  (if (> n 0)
+    (cons (first seq) (update-at-nth (rest seq) (dec n) val))
+    ;; else
+    (cons val (rest seq))))
+
+(defn- nullify-at-path [expr path]
+  (if (empty? path)
+    nil
+    ;; else
+    (let [subexpr (nth expr (first path))]
+      (update-at-nth expr (first path) (nullify-at-path subexpr (rest path))))))
+
+(defn external-vars [expr path]
+  (let [subexpr (at-path expr path)
+        in-subexpr (vars-in-expr subexpr)
+        expr-without (nullify-at-path expr path)
+        out-subexpr (vars-in-expr expr-without)]
+    (set/intersection in-subexpr out-subexpr)))
 
 ;; Standatd library
 (defn +#2 [a b]
