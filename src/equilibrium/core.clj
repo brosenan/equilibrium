@@ -65,7 +65,7 @@
 
 (defn- uniform-func [a b name]
   `(do
-     (def ~(name "-code") (atom '~[a b]))
+     (def ~(name "-code") (atom '~[(canonicalize a) (canonicalize b)]))
      (def ~(name "-comp") (atom (fn [~@(lhs-to-clj (rest a))] ~(canonicalize b))))
      (defn ~(name "") [~@(rest a)] ~(cons `(deref ~(name "-comp")) (rest a)))))
 
@@ -88,7 +88,7 @@
                      (= op# 'equilibrium.core/recur#1)
                      (let [~dummy-args val#]
                        (recur ~@dummy-args))))))))
-       (swap! ~(name "-code") assoc '~(-> a second canonicalize first) '~[a b])
+       (swap! ~(name "-code") assoc '~(-> a second canonicalize first) '~[(canonicalize a) (canonicalize b)])
        (swap! ~(name "-comp") assoc '~(-> a second canonicalize first)
               (fn ~(lhs-to-clj (rest a))
                 ~(-> b (tre (canonical-symbol a)) canonicalize))))))

@@ -58,10 +58,10 @@
 ;; ### Under the Hood
 
 ;; All functions (uniform functions included) are accompanied by two atoms:
-;; - A _code_ atom (with the `-code` suffix), containing a vector of two elements -- the s-expressions on the two sides of the equation, and
+;; - A _code_ atom (with the `-code` suffix), containing a vector of two elements -- the s-expressions on the two sides of the equation (canonicalized), and
 ;; - A _compiled_ atom (with the `-comp` suffix), containing a closure with the function definition.
 (fact
- @f#1-code => '[(f X) (+ X 2)]
+ @f#1-code => '[(equilibrium.core-test/f#1 X) (equilibrium.core/+#2 X 2)]
  @f#1-comp => fn?
  (@f#1-comp 4) => 6)
 
@@ -94,7 +94,8 @@
 (fact
  @sum#1-code => map?
  @sum#1-comp => map?
- (@sum#1-code 'equilibrium.core-test/list#2) => '[(sum (list V R)) (+ V (sum R))]
+ (@sum#1-code 'equilibrium.core-test/list#2) => '[(equilibrium.core-test/sum#1 (equilibrium.core-test/list#2 V R))
+                                                  (equilibrium.core/+#2 V (equilibrium.core-test/sum#1 R))]
  (@sum#1-comp 'equilibrium.core-test/list#2) => fn?)
 
 ;; # Abstract constructors
@@ -175,8 +176,8 @@
 
 ;; ## canonicalize
 
-;; This function compiles an Equilibrium s-expression into a Clojure
-;; one.
+;; This function compiles an Equilibrium s-expression into a valie
+;; Clojure one.
 
 ;; Literals are kept unchanged.
 (fact
