@@ -14,6 +14,8 @@
   (and (symbol? x)
        (str/starts-with? (name x) "?")))
 
+(declare to-clj)
+
 (defn- form-to-clj [form]
   (let [[sym & args] form]
     (when-not (symbol? sym)
@@ -39,9 +41,6 @@
     :else
     (symbol (str "$" (rand-int 1000000000)))))
 
-(defn- ctor-key [[ctor & args]]
-  (str (or (namespace ctor) *ns*) "/" (name ctor) "#" (count args)))
-
 (defn- uniform-func [a b name]
   `(do
      (def ~(name "-code") (atom '~[a b]))
@@ -56,8 +55,8 @@
            (def ~(name "-code") (atom {}))
            (def ~(name "-comp") (atom {}))
            (defn ~(name "") [& args#])))
-     (swap! ~(name "-code") assoc ~(-> a second ctor-key) '~[a b])
-     (swap! ~(name "-comp") assoc ~(-> a second ctor-key) (fn []))))
+     (swap! ~(name "-code") assoc ~(-> a second to-clj first) '~[a b])
+     (swap! ~(name "-comp") assoc ~(-> a second to-clj first) (fn []))))
 
 (defn- eq [a b]
   (if (symbol? a)
