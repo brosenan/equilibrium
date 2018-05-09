@@ -8,9 +8,7 @@
      ~@(for [[ctor & args] forms]
          (let [funcname (symbol (str (name ctor) "#" (count args)))]
            `(defn ~funcname [~@args]
-              (with-meta
-                (list '~ctor ~@args)
-                {:ctor ~(str (symbol (str *ns*) (name funcname)))}))))))
+              (list '~(symbol (str *ns*) (str ctor "#" (count args))) ~@args))))))
 
 (defn- variable? [x]
   (and (symbol? x)

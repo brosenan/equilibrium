@@ -9,22 +9,17 @@
 ;; self-evaluating functions, i.e., functions that evaluate to
 ;; themselves. The macro takes any number of forms, each consisting of
 ;; a name and example arguments.
-(eq/data (lst ?val ?next)
+(eq/data (list ?val ?next)
          (empty))
 
 ;; Each such form defines a Clojure function that returns the original
-;; s-expr (modulo the arguments, which are given as values). The
-;; function name is derived from the constructor, with `#` followed by
-;; the arity (number of arguments) added as suffix.
+;; s-expr, with the symbol replaced with the cannonical
+;; namespace/name#arity format. The function name is derived from the
+;; constructor, with `#` followed by the arity (number of arguments)
+;; added as suffix.
 (fact
- (lst#2 1 (lst#2 (inc 1) (empty#0))) => '(lst 1 (lst 2 (empty))))
-
-;; ### Under the Hood The expression returned by the constructor holds
-;; a `:ctor` meta-field, that uniquely identifies the constructor that
-;; created it.
-(fact
- (-> (lst#2 1 (empty#0)) meta :ctor) => "equilibrium.core-test/lst#2")
-
+ (list#2 1 (list#2 (inc 1) (empty#0))) =>
+ '(equilibrium.core-test/list#2 1 (equilibrium.core-test/list#2 2 (equilibrium.core-test/empty#0))))
 
 ;; # Equations
 ;; Equations are defined using the eq/= form.
@@ -75,10 +70,10 @@
 ;; Polymorphic functions are defined across multiple equations, each
 ;; contributing a solution for the case where the first argument is of
 ;; a specific constructor.
-(eq/= (sum (lst ?v ?r)) (+ ?v (sum ?r)))
+(eq/= (sum (list ?v ?r)) (+ ?v (sum ?r)))
 (eq/= (sum (empty)) 0)
 (comment (fact
-          (sum#1 (lst#2 1 (lst#2 2 (empty#0)))) => 3))
+          (sum#1 (list#2 1 (list#2 2 (empty#0)))) => 3))
 
 ;; ### Under the Hood
 
@@ -91,8 +86,8 @@
 (fact
  @sum#1-code => map?
  @sum#1-comp => map?
- (@sum#1-code "equilibrium.core-test/lst#2") => '[(sum (lst ?v ?r)) (+ ?v (sum ?r))]
- (@sum#1-comp "equilibrium.core-test/lst#2") => fn?)
+ (@sum#1-code "equilibrium.core-test/list#2") => '[(sum (list ?v ?r)) (+ ?v (sum ?r))]
+ (@sum#1-comp "equilibrium.core-test/list#2") => fn?)
 
 ;; # Under the Hood
 
