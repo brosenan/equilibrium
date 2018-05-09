@@ -13,7 +13,7 @@
          (empty))
 
 ;; Each such form defines a Clojure function that returns the original
-;; s-expr, with the symbol replaced with the cannonical
+;; s-expr, with the symbol replaced with the canonical
 ;; namespace/name#arity format. The function name is derived from the
 ;; constructor, with `#` followed by the arity (number of arguments)
 ;; added as suffix.
@@ -91,6 +91,23 @@
 
 ;; # Under the Hood
 
+;; ## canonical-symbol
+
+;; The `canonical-symbol` function takes a form, and returns a
+;; canonical symbol of the form `namespace/name#arity`, representing
+;; its name and arity.
+(fact
+ (eq/canonical-symbol '(list 1 (empty))) => 'equilibrium.core-test/list#2)
+
+;; If the sequence is not a proper form, i.e., does not start with a
+;; symbol, an exception is thrown.
+(fact
+ (eq/canonical-symbol '(1 2 3)) => (throws #"Symbol expected at the beginning of a form. '1' found in .*"))
+
+;; If a symbol cannot be resolved for that arity, an exception is thrown.
+(fact
+ (eq/canonical-symbol '(+ 1 2 3)) => (throws #"Symbol [+] cannot be resolved for arity 3 in .*"))
+
 ;; ## to-clj
 
 ;; This function compiles an Equilibrium s-expression into a Clojure
@@ -107,18 +124,9 @@
 (fact
  (eq/to-clj '(+ 1 2)) => '(equilibrium.core/+#2 1 2))
 
-;; For sequences that do not begin with a symbol, an exception is
-;; thrown. These are illegal in Equilibrium.
-(fact
- (eq/to-clj '(1 2 3)) => (throws #"Symbol expected at the beginning of a form. '1' found in .*"))
-
 ;; to-clj works recursively.
 (fact
  (eq/to-clj '(+ (* 1 2) 3)) => '(equilibrium.core/+#2 (equilibrium.core/*#2 1 2) 3))
-
-;; If a symbol cannot be resolved for that arity, an exception is thrown.
-(fact
- (eq/to-clj '(+ 1 2 3)) => (throws #"Symbol [+] cannot be resolved for arity 3 in .*"))
 
 ;; ### Special forms
 
