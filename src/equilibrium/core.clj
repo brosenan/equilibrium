@@ -3,7 +3,8 @@
             [clojure.walk :as walk]
             [clojure.set :as set]))
 
-(def ^:dynamic *curr-func*)
+(def ^:dynamic *curr-func* (atom #{}))
+(def ^:dynamic *defs*)
 
 (defmacro data [& forms]
   `(do
@@ -25,7 +26,7 @@
           name-arity (str (name sym) "#" arity)
           sym' (symbol (namespace sym) name-arity)
           ns (-> sym' resolve meta :ns)]
-      (if (= sym' *curr-func*)
+      (if (@*curr-func* sym')
         (symbol (str *ns*) (str sym'))
         ;; else
         (do
@@ -101,7 +102,7 @@
     ;; else
     (let [name (fn [suff]
                  (symbol (str (-> a first name) "#" (-> a rest count) suff)))]
-      (binding [*curr-func* (name "")]
+      (binding [*curr-func* (atom #{(name "")})]
         (if (variable? (second a))
           (uniform-func a b name)
           ;; else
@@ -120,7 +121,7 @@
    (cond
      (not (seq? expr)) []
      (let [sym (first expr)]
-       (-> sym resolve deref meta :abstract)) [addr]
+       (and (resolve sym) (-> sym resolve deref meta :abstract))) [addr]
      :else (mapcat (fn [[i elem]]
                      (find-abstract-components elem (conj addr i)))
                    (map-indexed vector expr)))))
@@ -132,31 +133,40 @@
                      (seq? x) (apply set/union x)
                      :else #{})) expr))
 
-(defn- at-path [expr path]
-  (if (empty? path)
-    expr
-    ;; else
-    (recur (nth expr (first path)) (rest path))))
+ (defn- at-path [expr path]
+   (if (empty? path)
+     expr
+     ;; else
+     (recur (nth expr (first path)) (rest path))))
+ 
+ (defn- update-at-nth [seq n val]
+   (if (> n 0)
+     (cons (first seq) (update-at-nth (rest seq) (dec n) val))
+     ;; else
+     (cons val (rest seq))))
+ 
+ (defn- set-at-path [expr path subexpr]
+   (if (empty? path)
+     subexpr
+     ;; else
+     (let [subexpr (nth expr (first path))]
+       (update-at-nth expr (first path) (set-at-path subexpr (rest path))))))
 
-(defn- update-at-nth [seq n val]
-  (if (> n 0)
-    (cons (first seq) (update-at-nth (rest seq) (dec n) val))
-    ;; else
-    (cons val (rest seq))))
-
-(defn- nullify-at-path [expr path]
-  (if (empty? path)
-    nil
-    ;; else
-    (let [subexpr (nth expr (first path))]
-      (update-at-nth expr (first path) (nullify-at-path subexpr (rest path))))))
-
-(defn external-vars [expr path]
-  (let [subexpr (at-path expr path)
-        in-subexpr (vars-in-expr subexpr)
-        expr-without (nullify-at-path expr path)
-        out-subexpr (vars-in-expr expr-without)]
-    (set/intersection in-subexpr out-subexpr)))
+(defn replace-abstract [[lhs rhs]]
+  (loop [rhs rhs
+         abstracts (find-abstract-components rhs)]
+    (if (empty? abstracts)
+      [lhs rhs]
+      ;; else
+      (let [path (first abstracts)
+            subexpr (at-path rhs path)
+            ctor-name (-> subexpr first name (str/split #"#") (get 0))
+            new-ctor (symbol (str ctor-name "-" (rand-int 1000000000)))
+            vars (set/intersection (vars-in-expr subexpr) (vars-in-expr lhs))
+            new-subexpr (cons new-ctor vars)
+            new-subexpr-canon (canonicalize new-subexpr)]
+        (swap! *defs* conj `(data ~new-subexpr))
+        (recur (set-at-path rhs path new-subexpr-canon) (rest abstracts))))))
 
 ;; Standatd library
 (defn +#2 [a b]

@@ -188,16 +188,35 @@
  (eq/vars-in-expr (eq/canonicalize
                    '(apply (lambda X Y) X))) => #{'X 'Y})
 
-;; The function `external-vars` take an expression and a path to a
-;; sub-expression. It returns the set of variables that appear both
-;; inside and outside the sub-expression. In the following example,
-;; the sub-expression is `(lambda X Y)`. It uses both X and Y, but Y
-;; is not shared with the larger expression.
+;; The function `replace-abstract` takes an equation, and returns a
+;; revised equation, where abstract concepts used on the
+;; right-hand-side are removed, and replaced with newly-defined
+;; concrete constructors. For equations that do not include abstract
+;; concepts, the equation is returned unmodified.
 (fact
- (eq/external-vars (eq/canonicalize
-                    '(apply (lambda X Y) X)) [1]) => #{'X})
+ (eq/replace-abstract '[(sum (empty)) 0]) => '[(sum (empty)) 0])
 
-;; The function `replace-abstract` replaces abstract concepts with newly-created concrete constructors. The constructors take 
+;; When abstract concepts exist, they are replaced by newly-defined
+;; ones.
+(def defs (atom []))
+(fact
+ (binding [eq/*defs* defs
+           eq/*curr-func* (atom #{'adder#1 'lambda-12345#1})]
+   (eq/replace-abstract [(eq/canonicalize '(adder N))
+                         (eq/canonicalize '(lambda X (eq/+ X N)))])
+   => [(eq/canonicalize '(adder N))
+       (eq/canonicalize '(lambda-12345 N))]
+   (provided
+    (rand-int 1000000000) => 12345)))
+
+;; A definition of the new constructor, along with equations
+;; defining its meaning according to the `abstract` definition are
+;; appended to a `*defs*` atom, which is passed to this function as a
+;; dynamic variable.
+(fact
+ @defs => '[(equilibrium.core/data (lambda-12345 N))])
+
+(comment (equilibrium.core/= (apply (lambda-12345 N) X) (eq/+ X N)))
 
 ;; # Under the Hood
 
