@@ -1,6 +1,6 @@
 (ns equilibrium.core-test
   (:require [midje.sweet :refer :all]
-            [equilibrium.core :as eq]))
+            [equilibrium.core :as eq :refer [+#2 *#2]]))
 
 
 ;; # Constructors
@@ -94,3 +94,54 @@
  (@sum#1-code "equilibrium.core-test/lst#2") => '[(sum (lst ?v ?r)) (+ ?v (sum ?r))]
  (@sum#1-comp "equilibrium.core-test/lst#2") => fn?)
 
+;; # Under the Hood
+
+;; ## to-clj
+
+;; This function compiles an Equilibrium s-expression into a Clojure
+;; one.
+
+;; Literals are kept unchanged.
+(fact
+ (eq/to-clj 3) => 3
+ (eq/to-clj "foo") => "foo")
+
+;; In forms (sequences that begin with a symbol), a `#` followed by
+;; the arity (number of args) is appended to the symbol. A full
+;; namespace is extracted based on resolution.
+(fact
+ (eq/to-clj '(+ 1 2)) => '(equilibrium.core/+#2 1 2))
+
+;; For sequences that do not begin with a symbol, an exception is
+;; thrown. These are illegal in Equilibrium.
+(fact
+ (eq/to-clj '(1 2 3)) => (throws #"Symbol expected at the beginning of a form. '1' found in .*"))
+
+;; to-clj works recursively.
+(fact
+ (eq/to-clj '(+ (* 1 2) 3)) => '(equilibrium.core/+#2 (equilibrium.core/*#2 1 2) 3))
+
+;; If a symbol cannot be resolved for that arity, an exception is thrown.
+(fact
+ (eq/to-clj '(+ 1 2 3)) => (throws #"Symbol [+] cannot be resolved for arity 3 in .*"))
+
+;; ### Special forms
+
+;; The `if` form translates to a Clojure `if` form.
+(fact
+ (eq/to-clj '(if true (+ 1 2) 3)) => '(if true (equilibrium.core/+#2 1 2) 3))
+
+;; ## lhs-to-clj
+
+;; Unlike to-clj, which translates right-hand-side expressions (i.e.,
+;; values), lhs-to-clj translates left-hand-side patterns.
+
+;; It operates on a sequence of arguments. If all are valid variables, they are returned as a Clojure vector.
+(fact
+ (eq/lhs-to-clj '(?a ?b ?c)) => '[?a ?b ?c])
+
+;; Literals and non-variable symbols are replaced with dummy variables. Nested sequences are taken as vectors.
+(fact
+ (eq/lhs-to-clj '(1 "two" (three ?four 5))) => '[$1 $2 [$3 ?four $5]]
+ (provided
+  (rand-int 1000000000) =streams=> [1 2 3 5]))
