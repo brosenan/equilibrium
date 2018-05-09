@@ -54,9 +54,13 @@
         `(do
            (def ~(name "-code") (atom {}))
            (def ~(name "-comp") (atom {}))
-           (defn ~(name "") [& args#])))
-     (swap! ~(name "-code") assoc ~(-> a second to-clj first) '~[a b])
-     (swap! ~(name "-comp") assoc ~(-> a second to-clj first) (fn []))))
+           (defn ~(name "") [key# & args#]
+             (let [func# (get @~(name "-comp") (first key#))]
+               (when (nil? func#)
+                 (throw (Exception. (str "No equation for " (first key#) " in function " ~(str (first a)) ". Options are: " (keys @~(name "-comp"))))))
+               (apply func# key# args#)))))
+     (swap! ~(name "-code") assoc '~(-> a second to-clj first) '~[a b])
+     (swap! ~(name "-comp") assoc '~(-> a second to-clj first) (fn ~(lhs-to-clj (rest a)) ~(to-clj b)))))
 
 (defn- eq [a b]
   (if (symbol? a)

@@ -72,8 +72,8 @@
 ;; a specific constructor.
 (eq/= (sum (list ?v ?r)) (+ ?v (sum ?r)))
 (eq/= (sum (empty)) 0)
-(comment (fact
-          (sum#1 (list#2 1 (list#2 2 (empty#0)))) => 3))
+(fact
+ (sum#1 (list#2 1 (list#2 2 (empty#0)))) => 3)
 
 ;; ### Under the Hood
 
@@ -86,8 +86,8 @@
 (fact
  @sum#1-code => map?
  @sum#1-comp => map?
- (@sum#1-code equilibrium.core-test/list#2) => '[(sum (list ?v ?r)) (+ ?v (sum ?r))]
- (@sum#1-comp equilibrium.core-test/list#2) => fn?)
+ (@sum#1-code 'equilibrium.core-test/list#2) => '[(sum (list ?v ?r)) (+ ?v (sum ?r))]
+ (@sum#1-comp 'equilibrium.core-test/list#2) => fn?)
 
 ;; # Under the Hood
 
