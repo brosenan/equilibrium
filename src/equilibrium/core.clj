@@ -1,7 +1,7 @@
 (ns equilibrium.core
   (:require [clojure.string :as str]))
 
-(def all-names (atom #{}))
+(def ^:dynamic *curr-func*)
 
 (defmacro data [& forms]
   `(do
@@ -22,9 +22,13 @@
           name-arity (str (name sym) "#" arity)
           sym' (symbol (namespace sym) name-arity)
           ns (-> sym' resolve meta :ns)]
-      (when (nil? ns)
-        (throw (Exception. (str "Symbol " sym " cannot be resolved for arity " arity " in " (meta form)))))
-      (symbol (str ns) name-arity))))
+      (if (= sym' *curr-func*)
+        (symbol (str *ns*) (str sym'))
+        ;; else
+        (do
+          (when (nil? ns)
+            (throw (Exception. (str "Symbol " sym " cannot be resolved for arity " arity " in " (meta form)))))
+          (symbol (str ns) name-arity))))))
 
 (declare to-clj)
 
@@ -45,6 +49,18 @@
     (variable? pattern) pattern
     :else
     (symbol (str "$" (rand-int 1000000000)))))
+(defn trace [x]
+  (prn x)
+  x)
+
+(defn tre [expr sym]
+  (if (= (and (seq? expr) (canonical-symbol expr)) sym)
+    (list 'equilibrium.core/recur (vec (rest expr)))
+    ;; else
+    (list 'equilibrium.core/return expr)))
+
+(data (return ?val)
+      (recur ?args))
 
 (defn- uniform-func [a b name]
   `(do
@@ -53,19 +69,28 @@
      (defn ~(name "") [~@(rest a)] ~(cons `(deref ~(name "-comp")) (rest a)))))
 
 (defn- polymorphic-func [a b name]
-  `(do
-     ~(when-not (contains? @all-names [(str *ns*) (name "")])
-        (swap! all-names conj [(str *ns*) (name "")])
-        `(do
-           (def ~(name "-code") (atom {}))
-           (def ~(name "-comp") (atom {}))
-           (defn ~(name "") [key# & args#]
-             (let [func# (get @~(name "-comp") (first key#))]
-               (when (nil? func#)
-                 (throw (Exception. (str "No equation for " (first key#) " in function " ~(str (first a)) ". Options are: " (keys @~(name "-comp"))))))
-               (apply func# key# args#)))))
-     (swap! ~(name "-code") assoc '~(-> a second to-clj first) '~[a b])
-     (swap! ~(name "-comp") assoc '~(-> a second to-clj first) (fn ~(lhs-to-clj (rest a)) ~(to-clj b)))))
+  (let [dummy-args (vec (for [i (range (count (rest a)))]
+                              (symbol (str "$" i))))
+        [key & args] dummy-args]
+    `(do
+       ~(when (nil? (resolve (name "")))
+          `(do
+             (def ~(name "-code") (atom {}))
+             (def ~(name "-comp") (atom {}))
+             (defn ~(name "") [~key ~@args]
+               (let [func# (get @~(name "-comp") (first ~key))]
+                 (when (nil? func#)
+                   (throw (Exception. (str "No equation for " (first ~key) " in function " ~(str (first a)) ". Options are: " (keys @~(name "-comp"))))))
+                 (let [[op# val#] (func# ~key ~@args)]
+                   (cond
+                     (= op# 'equilibrium.core/return#1) val#
+                     (= op# 'equilibrium.core/recur#1)
+                     (let [~dummy-args val#]
+                       (recur ~@dummy-args))))))))
+       (swap! ~(name "-code") assoc '~(-> a second to-clj first) '~[a b])
+       (swap! ~(name "-comp") assoc '~(-> a second to-clj first)
+              (fn ~(lhs-to-clj (rest a))
+                ~(-> b (tre (canonical-symbol a)) to-clj))))))
 
 (defn- eq [a b]
   (if (symbol? a)
@@ -73,10 +98,11 @@
     ;; else
     (let [name (fn [suff]
                  (symbol (str (-> a first name) "#" (-> a rest count) suff)))]
-      (if (variable? (second a))
-        (uniform-func a b name)
-        ;; else
-        (polymorphic-func a b name)))))
+      (binding [*curr-func* (name "")]
+        (if (variable? (second a))
+          (uniform-func a b name)
+          ;; else
+          (polymorphic-func a b name))))))
 
 ;; Standatd library
 (defn +#2 [a b]
@@ -87,3 +113,4 @@
 ;; Keep this at the end of this module because it overrides = in this module.
 (defmacro = [a b]
   (eq a b))
+

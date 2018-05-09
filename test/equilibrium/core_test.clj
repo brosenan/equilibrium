@@ -148,3 +148,39 @@
  (eq/lhs-to-clj '(1 "two" (three ?four 5))) => '[$1 $2 [$3 ?four $5]]
  (provided
   (rand-int 1000000000) =streams=> [1 2 3 5]))
+
+;; ## Tail Recursion Elimination (TRE)
+
+;; TRE is a common optimization in functional programming languages,
+;; and is essential when recursion is used in place of loops. Without
+;; TRE, the depth of recursion is limited to the depth of the
+;; stack. TRE, however, converts tail recursion into loops, and
+;; therefore allows them to be used without limitation.
+
+;; For example, while the `sum` function defined above does not use a
+;; tail recursion (the last operation it performs is `+`, which is
+;; performed after the recursion is complete), The following
+;; alternative definition does use tail recursion:
+(eq/= (tre-sum (list ?v ?l) ?s) (tre-sum ?l (+ ?s ?v)))
+(eq/= (tre-sum (empty) ?s) ?s)
+(eq/= (tre-sum ?l) (tre-sum ?l 0))
+
+;; The `tre` function takes an Equilibrium right-hand expression and a
+;; canonical symbol representing the function this expression defines,
+;; and returns a different expression.
+
+;; If the top-level expression is a function-call, and the function is
+;; not the given one, a `:return` tuple is returned, with the original
+;; expression as the return value.
+(fact
+ (eq/tre '(+ ?v (sum ?r)) 'equilibrium.core-test/sum#1) => '(equilibrium.core/return (+ ?v (sum ?r))))
+
+;; If the top-level is a call to the given function, a `:recur` tuple
+;; is returned, with the arguments to call on the next iteration.
+(fact
+ (eq/tre '(tre-sum ?l (+ ?s ?v)) 'equilibrium.core-test/tre-sum#2) => '(equilibrium.core/recur [?l (+ ?s ?v)]))
+
+;; So by calling `tre-sum` we get the same result as we would for
+;; `sum`, only that no recursion is involved.
+(fact
+ (tre-sum#1 (list#2 1 (list#2 2 (empty#0)))) => 3)
