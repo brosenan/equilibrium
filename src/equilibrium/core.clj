@@ -22,8 +22,9 @@
   (let [[sym & args] form]
     (when-not (symbol? sym)
       (throw (Exception. (str "Symbol expected at the beginning of a form. '" (pr-str sym) "' found in " (meta form)))))
-    (let [arity (count args)
-          name-arity (str (name sym) "#" arity)
+    (let [sym-name (-> sym name (str/split #"#") (get 0))
+          arity (count args)
+          name-arity (str sym-name "#" arity)
           sym' (symbol (namespace sym) name-arity)
           ns (-> sym' resolve meta :ns)]
       (if (@*curr-func* sym')

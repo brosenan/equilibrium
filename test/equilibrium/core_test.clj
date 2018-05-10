@@ -231,11 +231,19 @@
 ;; If the sequence is not a proper form, i.e., does not start with a
 ;; symbol, an exception is thrown.
 (fact
- (eq/canonical-symbol '(1 2 3)) => (throws #"Symbol expected at the beginning of a form. '1' found in .*"))
+ (eq/canonical-symbol '(1 2 3))
+ => (throws #"Symbol expected at the beginning of a form. '1' found in .*"))
 
 ;; If a symbol cannot be resolved for that arity, an exception is thrown.
 (fact
- (eq/canonical-symbol '(+ 1 2 3)) => (throws #"Symbol [+] cannot be resolved for arity 3 in .*"))
+ (eq/canonical-symbol '(+ 1 2 3))
+ => (throws #"Symbol [+] cannot be resolved for arity 3 in .*"))
+
+;; `canonical-symbol` ignores the arity already indicated in a
+;; symbol. If the symbol at the beginning of the sequence already has
+;; a `#arity` suffix, it is ignored.
+(fact
+ (eq/canonical-symbol '(list#3 1 (empty#7))) => 'equilibrium.core-test/list#2)
 
 ;; ## canonicalize
 
@@ -254,9 +262,13 @@
 (fact
  (eq/canonicalize '(+ 1 2)) => '(equilibrium.core/+#2 1 2))
 
-;; canonicalize works recursively.
+;; `canonicalize` works recursively.
 (fact
  (eq/canonicalize '(+ (* 1 2) 3)) => '(equilibrium.core/+#2 (equilibrium.core/*#2 1 2) 3))
+
+;; `canonicalize` can operate (and leave unchanged) canonical input.
+(fact
+ (eq/canonicalize (eq/canonicalize '(+ (* 1 2) 3))) => (eq/canonicalize '(+ (* 1 2) 3)))
 
 ;; ### Special forms
 
