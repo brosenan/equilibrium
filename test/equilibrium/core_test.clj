@@ -207,7 +207,7 @@
    => [(eq/canonicalize '(adder N))
        (eq/canonicalize '(lambda-12345 N))]
    (provided
-    (rand-int 1000000000) => 12345)))
+    (eq/uuid) => "12345")))
 
 ;; A definition of the new constructor, along with equations
 ;; defining its meaning according to the `abstract` definition are
@@ -276,6 +276,22 @@
 (fact
  (eq/canonicalize '(if true (+ 1 2) 3)) => '(if true (equilibrium.core/+#2 1 2) 3))
 
+;; ## Variables
+
+;; Variables are scoped within an equation. To signify that, if a
+;; dynamic variable `*eq-id*` is not `nil`, and holds a unique euation
+;; ID, a variable not already assigned an equation ID will be assigned
+;; one, as a suffix to the variable name, delimited by a `?`.
+(fact
+ (eq/canonicalize 'Foo) => 'Foo
+ (binding [eq/*eq-id* "Bar"]
+   (eq/canonicalize 'Foo) => 'Foo?Bar))
+
+;; If a variable is already taged with an equation ID, the original ID is kept.
+(fact
+ (binding [eq/*eq-id* "Quux"]
+   (eq/canonicalize 'Foo?Bar) => 'Foo?Bar))
+
 ;; ## lhs-to-clj
 
 ;; Unlike canonicalize, which translates right-hand-side expressions (i.e.,
@@ -289,7 +305,7 @@
 (fact
  (eq/lhs-to-clj '(1 "two" (three Four 5))) => '[$1 $2 [$3 Four $5]]
  (provided
-  (rand-int 1000000000) =streams=> [1 2 3 5]))
+  (eq/uuid) =streams=> ["1" "2" "3" "5"]))
 
 ;; ## Tail Recursion Elimination (TRE)
 

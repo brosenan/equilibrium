@@ -5,6 +5,11 @@
 
 (def ^:dynamic *curr-func* (atom #{}))
 (def ^:dynamic *defs*)
+(def ^:dynamic *eq-id* nil)
+
+(defn uuid []
+  (apply str (for [i (range 12)]
+               (rand-nth "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"))))
 
 (defmacro data [& forms]
   `(do
@@ -44,8 +49,16 @@
       :else
       (cons (canonical-symbol form) (map canonicalize args)))))
 
+(defn- var-canonicalize [x]
+  (if (or (nil? *eq-id*)
+          (re-find #"[?]" (name x)))
+    x
+    ;; else
+    (symbol (str (name x) "?" *eq-id*))))
+
 (defn canonicalize [x]
   (cond (seq? x) (form-canonicalize x)
+        (variable? x) (var-canonicalize x)
         :else x))
 
 (defn lhs-to-clj [pattern]
@@ -53,7 +66,7 @@
     (seq? pattern) (vec (map lhs-to-clj pattern))
     (variable? pattern) pattern
     :else
-    (symbol (str "$" (rand-int 1000000000)))))
+    (symbol (str "$" (uuid)))))
 (defn trace [x]
   (prn x)
   x)
@@ -162,7 +175,7 @@
       (let [path (first abstracts)
             subexpr (at-path rhs path)
             ctor-name (-> subexpr first name (str/split #"#") (get 0))
-            new-ctor (symbol (str ctor-name "-" (rand-int 1000000000)))
+            new-ctor (symbol (str ctor-name "-" (uuid)))
             vars (set/intersection (vars-in-expr subexpr) (vars-in-expr lhs))
             new-subexpr (cons new-ctor vars)
             new-subexpr-canon (canonicalize new-subexpr)]
