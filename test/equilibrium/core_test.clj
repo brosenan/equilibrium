@@ -51,6 +51,7 @@
 ;; a hash sign (`#`) followed by the function's arity (number of
 ;; arguments). This is to say that functions of the same name but
 ;; different arities are distinct.
+(reset! eq/dbg-inject-uuids ["my-eqid"]) ;; Inject an ID for this equation
 (eq/= (f X) (+ X 2))
 (fact
  (f#1 3) => 5)
@@ -61,7 +62,7 @@
 ;; - A _code_ atom (with the `-code` suffix), containing a vector of two elements -- the s-expressions on the two sides of the equation (canonicalized), and
 ;; - A _compiled_ atom (with the `-comp` suffix), containing a closure with the function definition.
 (fact
- @f#1-code => '[(equilibrium.core-test/f#1 X) (equilibrium.core/+#2 X 2)]
+ @f#1-code => '[(equilibrium.core-test/f#1 X?my-eqid) (equilibrium.core/+#2 X?my-eqid 2)]
  @f#1-comp => fn?
  (@f#1-comp 4) => 6)
 
@@ -78,6 +79,7 @@
 ;; Polymorphic functions are defined across multiple equations, each
 ;; contributing a solution for the case where the first argument is of
 ;; a specific constructor.
+(reset! eq/dbg-inject-uuids ["eqid1" "eqid2"]) ;; Inject an ID for this equation
 (eq/= (sum (list V R)) (+ V (sum R)))
 (eq/= (sum (empty)) 0)
 (fact
@@ -94,8 +96,8 @@
 (fact
  @sum#1-code => map?
  @sum#1-comp => map?
- (@sum#1-code 'equilibrium.core-test/list#2) => '[(equilibrium.core-test/sum#1 (equilibrium.core-test/list#2 V R))
-                                                  (equilibrium.core/+#2 V (equilibrium.core-test/sum#1 R))]
+ (@sum#1-code 'equilibrium.core-test/list#2) => '[(equilibrium.core-test/sum#1 (equilibrium.core-test/list#2 V?eqid1 R?eqid1))
+                                                  (equilibrium.core/+#2 V?eqid1 (equilibrium.core-test/sum#1 R?eqid1))]
  (@sum#1-comp 'equilibrium.core-test/list#2) => fn?)
 
 ;; # Abstract constructors
@@ -342,3 +344,4 @@
 ;; `sum`, only that no recursion is involved.
 (fact
  (tre-sum#1 (list#2 1 (list#2 2 (empty#0)))) => 3)
+

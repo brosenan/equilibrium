@@ -6,10 +6,16 @@
 (def ^:dynamic *curr-func* (atom #{}))
 (def ^:dynamic *defs*)
 (def ^:dynamic *eq-id* nil)
+(def dbg-inject-uuids (atom (list)))
 
 (defn uuid []
-  (apply str (for [i (range 12)]
-               (rand-nth "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"))))
+  (if (empty? @dbg-inject-uuids)
+    (apply str (for [i (range 12)]
+                 (rand-nth "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")))
+    ;; else
+    (let [id (first @dbg-inject-uuids)]
+      (swap! dbg-inject-uuids rest)
+      id)))
 
 (defmacro data [& forms]
   `(do
@@ -32,12 +38,14 @@
           name-arity (str sym-name "#" arity)
           sym' (symbol (namespace sym) name-arity)
           ns (-> sym' resolve meta :ns)]
-      (if (@*curr-func* sym')
-        (symbol (str *ns*) (str sym'))
+      (if (and (or (= (namespace sym') (str *ns*))
+                   (nil? (namespace sym')))
+               (@*curr-func* (symbol name-arity)))
+        (symbol (str *ns*) name-arity)
         ;; else
         (do
           (when (nil? ns)
-            (throw (Exception. (str "Symbol " sym " cannot be resolved for arity " arity " in " (meta form)))))
+            (throw (Exception. (str "Symbol " sym-name " cannot be resolved for arity " arity " in " (meta form)))))
           (symbol (str ns) name-arity))))))
 
 (declare canonicalize)
@@ -47,7 +55,7 @@
     (cond
       (= sym 'if) (cons 'if (map canonicalize args))
       :else
-      (cons (canonical-symbol form) (map canonicalize args)))))
+      (cons (canonical-symbol form) (doall (map canonicalize args))))))
 
 (defn- var-canonicalize [x]
   (if (or (nil? *eq-id*)
@@ -57,7 +65,7 @@
     (symbol (str (name x) "?" *eq-id*))))
 
 (defn canonicalize [x]
-  (cond (seq? x) (form-canonicalize x)
+  (cond (seq? x) (with-meta (form-canonicalize x) (meta x))
         (variable? x) (var-canonicalize x)
         :else x))
 
@@ -82,8 +90,8 @@
 
 (defn- uniform-func [a b name]
   `(do
-     (def ~(name "-code") (atom '~[(canonicalize a) (canonicalize b)]))
-     (def ~(name "-comp") (atom (fn [~@(lhs-to-clj (rest a))] ~(canonicalize b))))
+     (def ~(name "-code") (atom '~[a b]))
+     (def ~(name "-comp") (atom (fn [~@(lhs-to-clj (rest a))] ~b)))
      (defn ~(name "") [~@(rest a)] ~(cons `(deref ~(name "-comp")) (rest a)))))
 
 (defn- polymorphic-func [a b name]
@@ -112,15 +120,19 @@
 
 (defn- eq [a b]
   (if (symbol? a)
-    `(def ~a ~b)
-    ;; else
-    (let [name (fn [suff]
-                 (symbol (str (-> a first name) "#" (-> a rest count) suff)))]
-      (binding [*curr-func* (atom #{(name "")})]
-        (if (variable? (second a))
-          (uniform-func a b name)
-          ;; else
-          (polymorphic-func a b name))))))
+        `(def ~a ~b)
+        ;; else
+        (let [func-name-arity (str (-> a first name) "#" (count (rest a)))]
+          (binding [*eq-id* (uuid)
+                    *curr-func* (atom #{(symbol func-name-arity)})]
+            (let [a (canonicalize a)
+                  b (canonicalize b)]
+              (let [name (fn [suff]
+                           (symbol (str (-> a first name) suff)))]
+                (if (variable? (second a))
+                  (uniform-func a b name)
+                  ;; else
+                  (polymorphic-func a b name))))))))
 
 (defmacro abstract [form & eqs]
   (let [[sym & args] form]
@@ -191,4 +203,5 @@
 ;; Keep this at the end of this module because it overrides = in this module.
 (defmacro = [a b]
   (eq a b))
+
 
