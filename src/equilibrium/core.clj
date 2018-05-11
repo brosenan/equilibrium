@@ -33,20 +33,23 @@
   (let [[sym & args] form]
     (when-not (symbol? sym)
       (throw (Exception. (str "Symbol expected at the beginning of a form. '" (pr-str sym) "' found in " (meta form)))))
-    (let [sym-name (-> sym name (str/split #"#") (get 0))
-          arity (count args)
-          name-arity (str sym-name "#" arity)
-          sym' (symbol (namespace sym) name-arity)
-          ns (-> sym' resolve meta :ns)]
-      (if (and (or (= (namespace sym') (str *ns*))
-                   (nil? (namespace sym')))
-               (@*curr-func* (symbol name-arity)))
-        (symbol (str *ns*) name-arity)
-        ;; else
-        (do
-          (when (nil? ns)
-            (throw (Exception. (str "Symbol " sym-name " cannot be resolved for arity " arity " in " (meta form)))))
-          (symbol (str ns) name-arity))))))
+    (if (= sym 'if)
+      sym
+      ;; else
+      (let [sym-name (-> sym name (str/split #"#") (get 0))
+            arity (count args)
+            name-arity (str sym-name "#" arity)
+            sym' (symbol (namespace sym) name-arity)
+            ns (-> sym' resolve meta :ns)]
+        (if (and (or (= (namespace sym') (str *ns*))
+                     (nil? (namespace sym')))
+                 (@*curr-func* (symbol name-arity)))
+          (symbol (str *ns*) name-arity)
+          ;; else
+          (do
+            (when (nil? ns)
+              (throw (Exception. (str "Symbol " sym-name " cannot be resolved for arity " arity " in " (meta form)))))
+            (symbol (str ns) name-arity)))))))
 
 (declare canonicalize)
 
@@ -80,10 +83,11 @@
   x)
 
 (defn tre [expr sym]
-  (if (= (and (seq? expr) (canonical-symbol expr)) sym)
-    (list 'equilibrium.core/recur (vec (rest expr)))
-    ;; else
-    (list 'equilibrium.core/return expr)))
+  (cond
+    (and (seq? expr) (= (canonical-symbol expr) sym)) (list 'equilibrium.core/recur (vec (rest expr)))
+    (and (seq? expr) (= (first expr) 'if)) (let [[if' cond then else] expr]
+                                             (list if' cond (tre then sym) (tre else sym)))
+    :else (list 'equilibrium.core/return expr)))
 
 (data (return ?val)
       (recur ?args))

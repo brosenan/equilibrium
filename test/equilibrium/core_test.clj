@@ -96,8 +96,9 @@
 (fact
  @sum#1-code => map?
  @sum#1-comp => map?
- (@sum#1-code 'equilibrium.core-test/list#2) => '[(equilibrium.core-test/sum#1 (equilibrium.core-test/list#2 V?eqid1 R?eqid1))
-                                                  (equilibrium.core/+#2 V?eqid1 (equilibrium.core-test/sum#1 R?eqid1))]
+ (@sum#1-code 'equilibrium.core-test/list#2)
+ => '[(equilibrium.core-test/sum#1 (equilibrium.core-test/list#2 V?eqid1 R?eqid1))
+      (equilibrium.core/+#2 V?eqid1 (equilibrium.core-test/sum#1 R?eqid1))]
  (@sum#1-comp 'equilibrium.core-test/list#2) => fn?)
 
 ;; # Abstract constructors
@@ -345,3 +346,13 @@
 (fact
  (tre-sum#1 (list#2 1 (list#2 2 (empty#0)))) => 3)
 
+;; TRE handles `if` forms by recursing to both cases.
+(fact
+ (eq/tre '(if X
+            (sum L)
+            ;; else
+            Y) 'equilibrium.core-test/sum#1)
+ => '(if X
+       (equilibrium.core/recur [L])
+       ;; else
+       (equilibrium.core/return Y)))
