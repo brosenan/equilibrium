@@ -355,3 +355,48 @@
        (equilibrium.core/recur [L])
        ;; else
        (equilibrium.core/return Y)))
+
+;; ## Unification
+
+;; Unification of two terms is solving the equation of their
+;; equality. The process involves finding values, that when assigned
+;; to variables in either term, will make the terms equal.
+
+;; ### Scoping Variables
+
+;; As a first step towards unification, variables in either term must
+;; be made unique. This is because variables are scoped within a
+;; single equation. For example, consider two different equations both
+;; using variable `X`. Although named the same, each equation defines
+;; a different variable `X`, since variables are scoped within a
+;; single equation. An attempt to syntactically unify both equations
+;; will result in considering `X` as a single variable, trying to
+;; unify its value on both ends, leading to a wrong result. To avoid
+;; that, we first pre-process each term (or equation), providing the
+;; variables on each side a unique suffix, so that variables sharing a
+;; name on both sides are not confused to be the same.
+
+;; The function `scope-vars` augments a term by adding suffix to each
+;; variable. The suffix is unique to that term.
+(fact
+ (reset! eq/dbg-inject-uuids ["my-uuid"])
+ (eq/scope-vars '[(apply [lambda X Y] X) Y])
+ => '[(apply [lambda X?my-uuid Y?my-uuid] X?my-uuid) Y?my-uuid])
+
+;; Variables already assigned a unique ID are left unchanged.
+(fact
+ (reset! eq/dbg-inject-uuids ["my-uuid"])
+ (eq/scope-vars '[(apply [lambda X Y] X) Y?foo])
+ => '[(apply [lambda X?my-uuid Y?my-uuid] X?my-uuid) Y?foo])
+
+;; Underscore (`_`) represents a free, singleton variable. Even if
+;; multiple underscores appear in the same term, each will receive its
+;; own unique ID.
+(fact
+ (reset! eq/dbg-inject-uuids ["my-uuid", "foo" "bar"])
+ (eq/scope-vars '[(apply [lambda X _] X) _])
+ => '[(apply [lambda X?my-uuid _?foo] X?my-uuid) _?bar])
+
+;; ### Completion
+
+;; We sometimes want to unify a sub-term 

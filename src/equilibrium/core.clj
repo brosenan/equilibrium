@@ -198,6 +198,17 @@
         (swap! *defs* conj `(data ~new-subexpr))
         (recur (set-at-path rhs path new-subexpr-canon) (rest abstracts))))))
 
+(defn scope-vars [expr]
+  (let [id (uuid)]
+    (walk/postwalk #(if (= % '_)
+                      (symbol (str "_?" (uuid)))
+                      ;; else
+                      (if (and (variable? %)
+                               (not (re-find #"[?]" (name %))))
+                        (symbol (str (name %) "?" id))
+                        ;; else
+                        %)) expr)))
+
 ;; Standatd library
 (defn +#2 [a b]
   (+ a b))
