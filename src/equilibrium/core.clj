@@ -1,7 +1,8 @@
 (ns equilibrium.core
   (:require [clojure.string :as str]
             [clojure.walk :as walk]
-            [clojure.set :as set]))
+            [clojure.set :as set]
+            [clojure.core.unify :as unify]))
 
 (def ^:dynamic *curr-func* (atom #{}))
 (def ^:dynamic *defs*)
@@ -28,6 +29,9 @@
   (and (symbol? x)
        (or (Character/isUpperCase (first (name x)))
            (= (first (name x)) \_))))
+
+(def unifier (unify/make-unifier-fn variable?))
+(def unify (unify/make-unify-fn variable?))
 
 (defn canonical-symbol [form]
   (let [[sym & args] form]
@@ -208,6 +212,29 @@
                         (symbol (str (name %) "?" id))
                         ;; else
                         %)) expr)))
+
+(defn complete-term-to-match [subterm path term]
+  (if (empty? path)
+    subterm
+    ;; else
+    (let [index (first path)
+          elems (for [i (range (count term))]
+                  (if (= i index)
+                    (complete-term-to-match subterm (rest path) (nth term index))
+                    ;; else
+                    '_))]
+      (cond
+        (vector? term) (vec elems)
+        :else elems))))
+
+(defn unify-subterm [term subterm path]
+  (let [term' (complete-term-to-match subterm path term)
+        term (scope-vars term)
+        term' (scope-vars term')]
+    (if (nil? (unify term term'))
+      nil
+      ;; else
+      (unifier term term'))))
 
 ;; Standatd library
 (defn +#2 [a b]

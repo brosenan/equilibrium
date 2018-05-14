@@ -9,6 +9,7 @@
 (fact
  (eq/variable? 'Foo) => true
  (eq/variable? '_) => true
+ (eq/variable? '_foo) => true
  (eq/variable? 'foo) => false)
 
 ;; # Constructors
@@ -399,4 +400,46 @@
 
 ;; ### Completion
 
-;; We sometimes want to unify a sub-term 
+;; We sometimes want to unify a sub-term to a complete term. Consider
+;; the way applying a function works. We unify the left-hand-side of
+;; an equation defining the function with the function application,
+;; and replace it by the right-hand-side of the euqation under this
+;; unification. To do this, we need a way to compare apples to apples,
+;; that is, to complete the smaller term to match the larger one.
+
+;; The function `complete-term-to-match` takes a smaller term, a path,
+;; and a larger term.
+
+;; For an empty path, the first term is returned.
+(fact
+ (eq/complete-term-to-match '[(foo X Y) Y] [] '[(foo Y X) X]) => '[(foo X Y) Y])
+
+;; Given a non-empty path, the function returns a term for which the
+;; smaller term is located in that path. The returned term contains
+;; unbound variables (`_`) to match the larger term.
+(fact
+ (eq/complete-term-to-match '(foo N (+ N 1)) [0] '[(foo X Y) Y]) => '[(foo N (+ N 1)) _]
+ (eq/complete-term-to-match '(+ N 1) [1] '[(foo X Y) Y]) => '[_ (+ N 1)]
+ (eq/complete-term-to-match '(+ N 1) [0 2] '[(foo X Y) Y]) => '[(_ _ (+ N 1)) _])
+
+;; `complete-term-to-match` preserves the difference between vectors
+;; and sequences
+(fact
+ (eq/complete-term-to-match 'X [1] '[foo bar baz]) => vector?
+ (eq/complete-term-to-match 'X [1] '(foo bar baz)) => seq?)
+
+;; Unification
+
+;; The function `unify-subterm` takes a term, a subterm and a path in
+;; the term with which the subterm is to be unified. It returns the
+;; complete term with all variables assigned.
+(fact
+ (reset! eq/dbg-inject-uuids ["foo" "bar" "baz"])
+ (eq/unify-subterm '[(foo X Y) Y] '(foo N (+ N 1)) [0])
+ => '[(foo N?bar (+ N?bar 1)) (+ N?bar 1)])
+
+;; `unify-subterm` returns `nil` if the terms do not unify.
+(fact
+ (reset! eq/dbg-inject-uuids ["foo" "bar" "baz"])
+ (eq/unify-subterm '[(foo X Y) Y] '(bar N (+ N 1)) [0])
+ => nil)
