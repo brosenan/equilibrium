@@ -69,7 +69,6 @@
 
 (defn canonicalize [x]
   (cond (seq? x) (with-meta (form-canonicalize x) (meta x))
-        (variable? x) (var-canonicalize x)
         :else x))
 
 (defn lhs-to-clj [pattern]
@@ -195,6 +194,7 @@
             vars (set/intersection (vars-in-expr subexpr) (vars-in-expr lhs))
             new-subexpr (cons new-ctor vars)
             new-subexpr-canon (canonicalize new-subexpr)]
+        (comment (swap! *curr-func* conj (symbol (str new-ctor "#" (count vars)))))
         (swap! *defs* conj `(data ~new-subexpr))
         (recur (set-at-path rhs path new-subexpr-canon) (rest abstracts))))))
 

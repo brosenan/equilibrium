@@ -62,7 +62,7 @@
 ;; - A _code_ atom (with the `-code` suffix), containing a vector of two elements -- the s-expressions on the two sides of the equation (canonicalized), and
 ;; - A _compiled_ atom (with the `-comp` suffix), containing a closure with the function definition.
 (fact
- @f#1-code => '[(equilibrium.core-test/f#1 X?my-eqid) (equilibrium.core/+#2 X?my-eqid 2)]
+ @f#1-code => '[(equilibrium.core-test/f#1 X) (equilibrium.core/+#2 X 2)]
  @f#1-comp => fn?
  (@f#1-comp 4) => 6)
 
@@ -97,8 +97,8 @@
  @sum#1-code => map?
  @sum#1-comp => map?
  (@sum#1-code 'equilibrium.core-test/list#2)
- => '[(equilibrium.core-test/sum#1 (equilibrium.core-test/list#2 V?eqid1 R?eqid1))
-      (equilibrium.core/+#2 V?eqid1 (equilibrium.core-test/sum#1 R?eqid1))]
+ => '[(equilibrium.core-test/sum#1 (equilibrium.core-test/list#2 V R))
+      (equilibrium.core/+#2 V (equilibrium.core-test/sum#1 R))]
  (@sum#1-comp 'equilibrium.core-test/list#2) => fn?)
 
 ;; # Abstract constructors
@@ -203,14 +203,13 @@
 ;; ones.
 (def defs (atom []))
 (fact
+ (reset! eq/dbg-inject-uuids ["12345"])
  (binding [eq/*defs* defs
            eq/*curr-func* (atom #{'adder#1 'lambda-12345#1})]
    (eq/replace-abstract [(eq/canonicalize '(adder N))
                          (eq/canonicalize '(lambda X (eq/+ X N)))])
    => [(eq/canonicalize '(adder N))
-       (eq/canonicalize '(lambda-12345 N))]
-   (provided
-    (eq/uuid) => "12345")))
+       (eq/canonicalize '(lambda-12345 N))]))
 
 ;; A definition of the new constructor, along with equations
 ;; defining its meaning according to the `abstract` definition are
@@ -281,19 +280,19 @@
 
 ;; ## Variables
 
-;; Variables are scoped within an equation. To signify that, if a
-;; dynamic variable `*eq-id*` is not `nil`, and holds a unique euation
-;; ID, a variable not already assigned an equation ID will be assigned
-;; one, as a suffix to the variable name, delimited by a `?`.
-(fact
- (eq/canonicalize 'Foo) => 'Foo
- (binding [eq/*eq-id* "Bar"]
-   (eq/canonicalize 'Foo) => 'Foo?Bar))
-
-;; If a variable is already taged with an equation ID, the original ID is kept.
-(fact
- (binding [eq/*eq-id* "Quux"]
-   (eq/canonicalize 'Foo?Bar) => 'Foo?Bar))
+;; ;; Variables are scoped within an equation. To signify that, if a
+;; ;; dynamic variable `*eq-id*` is not `nil`, and holds a unique euation
+;; ;; ID, a variable not already assigned an equation ID will be assigned
+;; ;; one, as a suffix to the variable name, delimited by a `?`.
+;; (fact
+;;  (eq/canonicalize 'Foo) => 'Foo
+;;  (binding [eq/*eq-id* "Bar"]
+;;    (eq/canonicalize 'Foo) => 'Foo?Bar))
+;; 
+;; ;; If a variable is already taged with an equation ID, the original ID is kept.
+;; (fact
+;;  (binding [eq/*eq-id* "Quux"]
+;;    (eq/canonicalize 'Foo?Bar) => 'Foo?Bar))
 
 ;; ## lhs-to-clj
 
