@@ -1,3 +1,4 @@
+```clojure
 (ns equilibrium.core-test
   (:require [midje.sweet :refer :all]
             [equilibrium.core :as eq :refer [+#2 *#2]]))
@@ -531,7 +532,5 @@ complete term with all variables assigned.
  (reset! eq/dbg-inject-uuids ["foo" "bar" "baz"])
  (eq/unify-subterm '[(foo X Y) Y] '(bar N (+ N 1)) [0])
  => nil)
-```
-
 ```
 
