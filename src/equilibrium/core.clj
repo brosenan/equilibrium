@@ -140,21 +140,6 @@
               (fn ~(lhs-to-clj (rest a))
                 ~(-> b (tre (canonical-symbol a)) canonicalize))))))
 
-(defn- eq [a b]
-  (if (symbol? a)
-        `(def ~a ~b)
-        ;; else
-        (let [func-name-arity (str (-> a first name) "#" (count (rest a)))]
-          (binding [*eq-id* (uuid)
-                    *curr-func* (atom #{(symbol func-name-arity)})]
-            (let [a (canonicalize a)
-                  b (canonicalize b)]
-              (let [name (fn [suff]
-                           (symbol (str (-> a first name) suff)))]
-                (if (variable? (second a))
-                  (uniform-func a b name)
-                  ;; else
-                  (polymorphic-func a b name))))))))
 
 (defmacro abstract [form & eqs]
   (let [[sym & args] form]
@@ -266,6 +251,27 @@
                   [lhs' rhs'] (enumerate-vars [lhs' rhs'])]
               (swap! *defs* conj (list 'equilibrium.core/= lhs' rhs'))))
           (recur (set-at-path rhs path new-subexpr-canon) (rest abstracts)))))))
+
+(defn- eq [a b]
+  (let [b (canonicalize b)
+        defs (atom [])
+        [a b] (binding [*defs* defs]
+                (replace-abstract [a b]))]
+    `(do
+       ~@ @defs
+      ~(if (symbol? a)
+         `(def ~a ~b)
+         ;; else
+         (let [func-name-arity (str (-> a first name) "#" (count (rest a)))]
+           (binding [*eq-id* (uuid)
+                     *curr-func* (atom #{(symbol func-name-arity)})]
+             (let [a (canonicalize a)]
+               (let [name (fn [suff]
+                            (symbol (str (-> a first name) suff)))]
+                 (if (variable? (second a))
+                   (uniform-func a b name)
+                   ;; else
+                   (polymorphic-func a b name))))))))))
 
 ;; Standatd library
 (defn +#2 [a b]

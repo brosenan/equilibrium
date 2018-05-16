@@ -102,7 +102,7 @@
       (equilibrium.core/+#2 V (equilibrium.core-test/sum#1 R))]
  (@sum#1-comp 'equilibrium.core-test/list#2) => fn?)
 
-;; # Abstract constructors
+;; # Abstract Constructors
 
 ;; While Equilibrium resembles functional programming languages, it
 ;; does not have a concept of functions in the sense they exist, e.g.,
@@ -155,6 +155,21 @@
 ;; the expression defining the function's value to the value returned
 ;; by `apply`.
 
+;; For example, by defining the equation:
+(eq/= (adder N) (lambda X (+ X N)))
+;; we actually define a higher-order function, so that if we define:
+(eq/= my-inc (adder 1))
+;; `my-inc` becomes a function on which we can call `apply`, to add 1
+;; to a number.
+(fact
+ (apply#2 my-inc 3) => 4)
+
+;; This can also be done directly:
+(eq/= my-dec (lambda X (+ X -1)))
+(fact
+ (apply#2 my-dec 5) => 4)
+
+
 ;; ### Under the Hood
 
 ;; Abstract concepts are represented as variables containing the
@@ -205,7 +220,7 @@
 ;; ones.
 (def defs (atom []))
 (fact
- (reset! eq/dbg-inject-uuids ["12345"])
+ (reset! eq/dbg-inject-uuids ["12345" "foo" "bar" "baz"])
  (binding [eq/*defs* defs
            eq/*curr-func* (atom #{'adder#1})]
    (eq/replace-abstract [(eq/canonicalize '(adder N))
