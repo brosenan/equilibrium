@@ -4,6 +4,22 @@
             [clojure.set :as set]
             [clojure.core.unify :as unify]))
 
+(def ^:dynamic *trace-depth* 0)
+
+(defmacro trace [x]
+  `(do
+     (apply print (for [i# (range *trace-depth*)]
+                    "  "))
+     (pr '~x)
+     (println " =>")
+     (let [x# (binding [*trace-depth* (inc *trace-depth*)]
+                ~x)]
+       (apply print (for [i# (range *trace-depth*)]
+                      "  "))
+       (print "=> ")
+       (prn x#)
+       x#)))
+
 (def ^:dynamic *curr-func* (atom #{}))
 (def ^:dynamic *defs*)
 (def ^:dynamic *eq-id* nil)
@@ -32,6 +48,7 @@
 
 (def unifier (unify/make-unifier-fn variable?))
 (def unify (unify/make-unify-fn variable?))
+(def subst (unify/make-subst-fn variable?))
 
 (defn canonical-symbol [form]
   (let [[sym & args] form]
@@ -81,9 +98,7 @@
     (variable? pattern) pattern
     :else
     (symbol (str "$" (uuid)))))
-(defn trace [x]
-  (prn x)
-  x)
+
 
 (defn tre [expr sym]
   (cond
@@ -182,25 +197,8 @@
    (if (empty? path)
      subexpr
      ;; else
-     (let [subexpr (nth expr (first path))]
-       (update-at-nth expr (first path) (set-at-path subexpr (rest path))))))
-
-(defn replace-abstract [[lhs rhs]]
-  (loop [rhs rhs
-         abstracts (find-abstract-components rhs)]
-    (if (empty? abstracts)
-      [lhs rhs]
-      ;; else
-      (let [path (first abstracts)
-            subexpr (at-path rhs path)
-            ctor-name (-> subexpr first name (str/split #"#") (get 0))
-            new-ctor (symbol (str ctor-name "-" (uuid)))
-            vars (set/intersection (vars-in-expr subexpr) (vars-in-expr lhs))
-            new-subexpr (cons new-ctor vars)
-            new-subexpr-canon (canonicalize new-subexpr)]
-        (comment (swap! *curr-func* conj (symbol (str new-ctor "#" (count vars)))))
-        (swap! *defs* conj `(data ~new-subexpr))
-        (recur (set-at-path rhs path new-subexpr-canon) (rest abstracts))))))
+     (let [expr' (nth expr (first path))]
+       (update-at-nth expr (first path) (set-at-path expr' (rest path) subexpr)))))
 
 (defn scope-vars [expr]
   (let [id (uuid)]
@@ -230,17 +228,44 @@
 (defn unify-subterm [term subterm path]
   (let [term' (complete-term-to-match subterm path term)
         term (scope-vars term)
-        term' (scope-vars term')]
-    (if (nil? (unify term term'))
+        term' (scope-vars term')
+        bindings (unify term term')]
+    (if (nil? bindings)
       nil
       ;; else
-      (unifier term term'))))
+      (let [bindings (unify/flatten-bindings bindings)]
+        (subst term' bindings)))))
 
 (defn enumerate-vars [term]
   (let [vars (vars-in-expr term)
         varmap (into {} (for [[i var] (map-indexed vector vars)]
                           [var (symbol (str "V" (inc i)))]))]
     (walk/postwalk-replace varmap term)))
+
+(defn replace-abstract [[lhs rhs]]
+  (loop [rhs rhs
+         abstracts (find-abstract-components rhs)]
+    (if (empty? abstracts)
+      [lhs rhs]
+      ;; else
+      (let [path (first abstracts)
+            subexpr (at-path rhs path)
+            ctor-name (-> subexpr first name (str/split #"#") (get 0))
+            new-ctor (symbol (str ctor-name "-" (uuid)))
+            vars (set/intersection (vars-in-expr subexpr) (vars-in-expr lhs))
+            new-subexpr (cons new-ctor vars)
+            ctor-def (resolve (first subexpr))
+            equations @ctor-def]
+        (swap! *curr-func* conj (symbol (str (name new-ctor) "#" (count vars))))
+        (let [new-subexpr-canon (canonicalize new-subexpr)]
+          (swap! *defs* conj `(data ~new-subexpr))
+          (doseq [equation equations]
+            (let [[subexpr new-subexpr] (scope-vars [subexpr new-subexpr])
+                  [lhs' rhs'] (unify-subterm equation subexpr [0 1])
+                  lhs' (set-at-path lhs' [1] new-subexpr)
+                  [lhs' rhs'] (enumerate-vars [lhs' rhs'])]
+              (swap! *defs* conj (list 'equilibrium.core/= lhs' rhs'))))
+          (recur (set-at-path rhs path new-subexpr-canon) (rest abstracts)))))))
 
 ;; Standatd library
 (defn +#2 [a b]
@@ -251,5 +276,6 @@
 ;; Keep this at the end of this module because it overrides = in this module.
 (defmacro = [a b]
   (eq a b))
+
 
 

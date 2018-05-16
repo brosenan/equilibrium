@@ -246,11 +246,11 @@ ones.
 (fact
  (reset! eq/dbg-inject-uuids ["12345"])
  (binding [eq/*defs* defs
-           eq/*curr-func* (atom #{'adder#1 'lambda-12345#1})]
+           eq/*curr-func* (atom #{'adder#1})]
    (eq/replace-abstract [(eq/canonicalize '(adder N))
                          (eq/canonicalize '(lambda X (eq/+ X N)))])
-   => [(eq/canonicalize '(adder N))
-       (eq/canonicalize '(lambda-12345 N))]))
+   => '[(equilibrium.core-test/adder#1 N)
+        (equilibrium.core-test/lambda-12345#1 N)]))
 
 ```
 A definition of the new constructor, along with equations
@@ -259,9 +259,8 @@ appended to a `*defs*` atom, which is passed to this function as a
 dynamic variable.
 ```clojure
 (fact
- @defs => '[(equilibrium.core/data (lambda-12345 N))])
-
-(comment (equilibrium.core/= (apply (lambda-12345 N) X) (eq/+ X N)))
+ @defs => '[(equilibrium.core/data (lambda-12345 N))
+            (equilibrium.core/= (equilibrium.core-test/apply#2 (lambda-12345 V1) V2) (equilibrium.core/+#2 V2 V1))])
 
 ```
 # Under the Hood
