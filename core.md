@@ -225,7 +225,8 @@ set containing all the variables within that expression.
 ```clojure
 (fact
  (eq/vars-in-expr (eq/canonicalize
-                   '(apply (lambda X Y) X))) => #{'X 'Y})
+                   '(apply (lambda X Y) X))) => #{'X 'Y}
+ (eq/vars-in-expr '[X Y [Z Y] X]) => #{'X 'Y 'Z})
 
 ```
 The function `replace-abstract` takes an equation, and returns a
@@ -532,5 +533,26 @@ complete term with all variables assigned.
  (reset! eq/dbg-inject-uuids ["foo" "bar" "baz"])
  (eq/unify-subterm '[(foo X Y) Y] '(bar N (+ N 1)) [0])
  => nil)
+
+```
+### Back to Normal
+
+While not explicitly part of the unification process, the
+unification process leaves variables _scoped_, that is, with the
+`?` character embedded in them. This character will prevent these
+variables to be scoped again, which is what we want if we wish to
+go on unifying the term with other terms. However, if we wish to
+generate a new equation out of the new term, we need to change all
+variables in the new equation into un-scoped ones.
+
+The `enumerate-vars` function takes a term (s-expression) as input,
+and returns an equivalent term, with _enumerated variables_, that
+is, the variables `V1`, `V2`, `V3`, etc.
+```clojure
+(fact
+ (let [term '[(foo X Y) (bar [Y X])]
+       newterm (eq/enumerate-vars term)]
+   (eq/unify term newterm) =not=> nil?
+   (eq/vars-in-expr newterm) => #{'V1 'V2}))
 ```
 

@@ -163,7 +163,7 @@
   (walk/postwalk (fn [x]
                    (cond
                      (variable? x) #{x}
-                     (seq? x) (apply set/union x)
+                     (sequential? x) (apply set/union x)
                      :else #{})) expr))
 
  (defn- at-path [expr path]
@@ -235,6 +235,12 @@
       nil
       ;; else
       (unifier term term'))))
+
+(defn enumerate-vars [term]
+  (let [vars (vars-in-expr term)
+        varmap (into {} (for [[i var] (map-indexed vector vars)]
+                          [var (symbol (str "V" (inc i)))]))]
+    (walk/postwalk-replace varmap term)))
 
 ;; Standatd library
 (defn +#2 [a b]
