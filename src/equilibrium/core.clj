@@ -112,6 +112,7 @@
 
 (defn- uniform-func [a b name]
   `(do
+     (declare ~(name ""))
      (def ~(name "-code") (atom '~[a b]))
      (def ~(name "-comp") (atom (fn [~@(lhs-to-clj (rest a))] ~b)))
      (defn ~(name "") [~@(rest a)] ~(cons `(deref ~(name "-comp")) (rest a)))))
@@ -259,6 +260,57 @@
     (let [func-name-arity (str (-> a first name) "#" (count (rest a)))]
       #{(symbol func-name-arity)})))
 
+(defn saturate [expr]
+  (walk/postwalk #(if (variable? %)
+                    (symbol (str "!SAT!" (name %)))
+                    ;; else
+                    %) expr))
+
+(defn- saturated? [sym]
+  (and (symbol? sym)
+       (str/starts-with? (name sym) "!SAT!")))
+
+(defn unsaturate [expr]
+  (walk/prewalk  #(if (saturated? %)
+                    (symbol (subs (name %) 5))
+                    ;; else
+                    %) expr))
+
+(declare partial-eval)
+
+(defn- partial-eval-call [form]
+  (let [[f & args] form
+        pairs (map partial-eval args)
+        form (cons f (for [[expr const] pairs]
+                       expr))
+        const (every? second pairs)
+        code-sym (symbol (namespace f) (str (name f) "-code"))
+        code-var (resolve code-sym)]
+    (if const
+      [(eval form) true]
+      ;; else
+      (if (nil? code-var)
+        [form const]
+        ;; else
+        (let [code @@code-var
+              equation (cond
+                         (vector? code) code
+                         (and (seq? (first args))
+                              (map? code)) (code (-> args first first))
+                         :else nil)]
+          (if (nil? equation)
+            [form const]
+            ;; else
+            (let [[lhs rhs] equation
+                  binds (unify lhs form)]
+              (partial-eval (subst rhs binds)))))))))
+
+(defn partial-eval [expr]
+  (if (seq? expr)
+    (partial-eval-call expr)
+    ;; else
+    [expr (not (saturated? expr))]))
+
 (defn- eq [a b]
   (binding [*eq-id* (uuid)
             *curr-func* (atom (curr-func a))]
@@ -284,6 +336,8 @@
   (+ a b))
 (defn *#2 [a b]
   (* a b))
+(defn <#2 [a b]
+  (< a b))
 
 ;; Keep this at the end of this module because it overrides = in this module.
 (defmacro = [a b]

@@ -1,6 +1,6 @@
 (ns equilibrium.core-test
   (:require [midje.sweet :refer :all]
-            [equilibrium.core :as eq :refer [+#2 *#2]]))
+            [equilibrium.core :as eq :refer [+#2 *#2 <#2]]))
 
 
 ;; # Variables
@@ -56,6 +56,14 @@
 (eq/= (f X) (+ X 2))
 (fact
  (f#1 3) => 5)
+
+;; A uniform function can be recursive
+(eq/= (range A B) (if (< A B)
+                    (list A (range (+ A 1) B))
+                    ;; else
+                    (empty)))
+(fact
+ (range#2 1 3) => (eq/canonicalize '(list 1 (list 2 (empty)))))
 
 ;; ### Under the Hood
 
@@ -477,3 +485,132 @@
        newterm (eq/enumerate-vars term)]
    (eq/unify term newterm) =not=> nil?
    (eq/vars-in-expr newterm) => #{'V1 'V2}))
+
+;; ## Partial Evaluation
+
+;; Partial evaluation is a symbolic computation that takes place at
+;; compile time. It starts with an expression that includes some
+;; variables (unknowns), and results in another expression, where all
+;; the computation that can be applied at that time is being
+;; applied. This includes replacing references to functions with their
+;; respective bodies (_inlining_), and calling functions for which all
+;; arguments are known.
+
+;; ### Saturation
+
+;; A first, important step in performing partial evaluation in
+;; Equilibrium is _saturating_ all variables in the original
+;; expression. Saturation is acheived using the `saturate` function.
+
+;; Expressions that do not contain variables are trivially saturated.
+(fact
+ (eq/saturate '(foo bar 3 4)) => '(foo bar 3 4))
+
+;; Saturating a variable involves replacing it with a symbol that is
+;; _not_ a variable, but maps uniquely to it. We perform this by
+;; prepending the string `!SAT!` to the variable symbol.
+(fact
+ (eq/saturate 'Foo) => '!SAT!Foo)
+
+;; Expressions that contain variables are transformed so that the
+;; variables are replaced, but the rest of the expression is
+;; unchanged.
+(fact
+ (eq/saturate '(foo bar X Y)) => '(foo bar !SAT!X !SAT!Y))
+
+;; The `unsaturate` function replaces saturated variables back to the
+;; original variable symbols.
+(fact
+ (eq/unsaturate '(foo bar 3 4)) => '(foo bar 3 4)
+ (eq/unsaturate '!SAT!Foo) => 'Foo
+ (eq/unsaturate '(foo bar !SAT!X !SAT!Y)) => '(foo bar X Y))
+
+;; ### Primitives
+
+;; The function `partial-eval` partially-evaluates a saturated,
+;; canonical expression. It returns the evaluated expression and a
+;; Boolean indicating if the value is a constant.
+
+;; Primitives (numbers, strings, keywords, symbols, etc) are
+;; partially-evaluated to themselves.
+(fact
+ (eq/partial-eval 123) => [123 true]
+ (eq/partial-eval "foo") => ["foo" true]
+ (eq/partial-eval 'foo) => '[foo true]
+ ;; Saturated variables are not constants
+ (eq/partial-eval '!SAT!Foo) => '[!SAT!Foo false])
+
+;; For the purpose of the rest of this discussion, we define the
+;; function `cs`, which canonicalizes and then saturates an
+;; expression:
+(defn- cs [expr]
+  (-> expr eq/canonicalize eq/saturate))
+
+;; ### Uniform Functions
+
+;; When invoking a uniform function, it is certain that the body of
+;; the function (the equation's right-hand-side) will be evaluated. It
+;; is therefore safe to replace the head with the function's body,
+;; with parameters replaced with argument values.
+(fact
+ (eq/partial-eval (cs '(f X)))
+ => [(cs '(+ X 2)) false])
+
+;; `partial-eval` is applied recursively to arguments.
+(fact
+ (eq/partial-eval (cs '(f (f X))))
+ => [(cs '(+ (+ X 2) 2)) false])
+
+;; Partial evaluation operates recursively also on the right-hand-side
+;; expression. Consider the function `g` defined as follows:
+(eq/= (g X) (f (f X)))
+
+;; By evaluating `g` we get an invocation of `f`. Since we know `f` is
+;; to be invoked subsequently, we can replace it as well, and get the
+;; final form.
+(fact
+ (eq/partial-eval (cs '(g X)))
+ => [(cs '(+ (+ X 2) 2)) false])
+
+;; ### Constructors and Builtins
+
+;; Constructors and Builtins are evaluated to themselves, but the
+;; arguments are being evaluated recursively.
+(fact
+ (eq/partial-eval (cs '(list (f X) (empty))))
+ => [(cs '(list (+ X 2) (empty))) false])
+
+;; ### Polymorphic Functions
+
+;; Inlining a polymorphic function requires knowledge of which of its
+;; equations is to be invoked. This is known, if the first argument to
+;; the function is a data form matching one of the equations. For
+;; example, the `sum` function can be inlined if it is known that the
+;; argument is either a `list` or `empty`.
+(fact
+ (eq/partial-eval (cs '(sum (list A (list B (empty))))))
+ => [(cs '(+ A (+ B 0))) false])
+
+;; If the first argument to a function is not a sequence (e.g., a
+;; saturated variable), inlining does not take place.
+(fact
+ (eq/partial-eval (cs '(sum L))) => [(cs '(sum L)) false])
+
+;; ### Constant Propagation
+
+;; A _constant expression_ is one that does not contain (saturated)
+;; variables. Constant expressions can be computed ahead of time to
+;; the level of a value.
+(fact
+ (eq/partial-eval (cs '(+ 2 3))) => [5 true]
+ (eq/partial-eval (cs '(sum (range 1 10)))) => [45 true])
+
+;; ### Conditionals
+
+;; The `if` form requires special treatment. If we were to inline both
+;; _then_ and _else_ branches of the `if` form, we would never
+;; terminate in cases where `if` is used to check for termination
+;; conditions in a recursion. For example, consider the `range`
+;; function defined above. If we do not know the edges of the range
+;; statically, we will iterate indefenitely.
+
