@@ -326,7 +326,14 @@
                   ;; else
                   (partial-eval-call expr))
     (vector? expr) (let [pairs (map partial-eval expr)]
-                     [(vec (map first pairs)) false])
+                     [(vec (map first pairs)) (every? second pairs)])
+    (map? expr) (let [quads (for [[k v] expr]
+                              [(partial-eval k) (partial-eval v)])
+                      expr (into {} (for [[[k kc] [v vc]] quads]
+                                      [k v]))
+                      const (every? second (for [q quads
+                                                 x q] x))]
+                  [expr const])
     :else [expr (not (saturated? expr))]))
 
 (defn- eq [a b]

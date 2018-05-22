@@ -765,9 +765,15 @@ program does not terminate.
 Partial evaluation operates on Clojure collections by evaluating
 their respective members.
 ```clojure
-'(fact
+(fact
+ (eq/partial-eval (cs '[1 2 3]))
+ => [(cs '[1 2 3]) true]
  (eq/partial-eval (cs '[(f X) (g X)]))
- => [(cs '[(+ X 2) (+ (+ X 2) 2)]) false])
+ => [(cs '[(+ X 2) (+ (+ X 2) 2)]) false]
+ (eq/partial-eval (cs '{1 2}))
+ => [(cs '{1 2}) true]
+ (eq/partial-eval (cs '{(f X) (g X)}))
+ => [(cs '{(+ X 2) (+ (+ X 2) 2)}) false])
 
 ```
 ## Just In Time Compilation
