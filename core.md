@@ -733,6 +733,15 @@ the level of a value.
  (eq/partial-eval (cs '(sum (range 1 10)))) => [45 true])
 
 ```
+### Variables
+
+Symbols that are not saturated variables can be taken as Clojure
+variables. if they are, we can replace them by their values.
+```clojure
+(fact
+ (eq/partial-eval (cs 'x)) => [2 true])
+
+```
 ### Conditionals
 
 The `if` form requires special treatment. If we were to inline both
@@ -798,5 +807,101 @@ definition of a function corresponding to the equation.
          func' (eval func)]
      eq => (eq/canonicalize '[(foo X) (+ X (+ X 0))])
      (func' 3) => (equilibrium.core/return#1 6))))
+
+```
+# Building a DSL
+
+To build a DSL, we need to first define its primitives, using
+`data` and `abstract` declarations. Then we define equations to
+provide semantics to these primitives.
+
+The DSL we define here has unary arithmetic operators. These
+operators are applied to a number given to the semantic function.
+
+The primitives include a `+` and a `*` operators, and a `seq` combinator.
+```clojure
+(eq/data (+ X) (* X) (seq A B))
+
+```
+We define its semantics through the `apply-op` function, which
+takes the operator and a number, and applies the operator to the
+number
+```clojure
+(eq/= (apply-op (+ X) N) (+ X N))
+(eq/= (apply-op (* X) N) (* X N))
+
+```
+The semantics of the `seq` combinator is to first apply `A` to the
+given number, and then `B`.
+```clojure
+(eq/= (apply-op (seq A B) N) (apply-op B (apply-op A N)))
+
+```
+Now we can define operations. For example, the `even` operation
+which multiplies by 2, and the `odd` operation multiples a number
+by 2, and then adds 1.
+```clojure
+(eq/= even (* 2))
+(eq/= odd (seq (* 2) (+ 1)))
+(eq/= ten (seq odd ;; 10(dec) = 1010(bin)
+               (seq even
+                    (seq odd
+                         even))))
+
+```
+We can evaluate this DSL by using its semanic function. We will
+call it from Clojure, by adding the `#` suffix.
+
+```clojure
+(fact
+ (apply-op#2 ten 0) => 10)
+
+```
+Although this DSL is relatively high-level, when we define a
+function that uses its code (in this case, the `ten` "program" we
+defined earlier), the generated code is reduced to plain
+Equilibrium code, and the DSL layer disappears.
+```clojure
+(eq/= (apply-ten-to N) (apply-op ten N))
+(fact
+ @apply-ten-to#1-code =>
+ '[(equilibrium.core-test/apply-ten-to#1 N)
+   (equilibrium.core/*#2
+    2
+    (equilibrium.core/+#2
+     1
+     (equilibrium.core/*#2
+      2
+      (equilibrium.core/*#2
+       2
+       (equilibrium.core/+#2
+        1
+        (equilibrium.core/*#2
+         2 N))))))])
+
+```
+Specifically, the above generated code does not incur overhead for
+dispatching.
+
+### Higher-order Constructs
+
+Now imagine we wish to take hold of the current value from within
+the "program". We wish to bind the value at one point in the
+program to a variable, and use it afterwards. This can be achieved
+by defining an `abstract` concept.
+```clojure
+(eq/abstract (as X P)
+             [(apply-op (as X P) X) (apply-op P X)])
+
+```
+This definition includes an equation defining the semantics of the
+`as` construct. Its semantics is defined as binding the free
+variable `X` with the number the program is applied to (the second
+argument to `apply-op`), and then applying the rest of the program
+(`P`) to the same value. Now, we can define the `square` operator
+as follows:
+```clojure
+'(eq/= (square N) (apply-op (as X
+                                (* X X)) N))
 ```
 

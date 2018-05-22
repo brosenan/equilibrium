@@ -146,8 +146,8 @@
         (let [code @@code-var
               equation (cond
                          (vector? code) code
-                         (and (seq? (first args))
-                              (map? code)) (code (-> args first first))
+                         (and (seq? (second form))
+                              (map? code)) (code (-> form second first))
                          :else nil)]
           (if (nil? equation)
             [form const]
@@ -183,6 +183,8 @@
                       const (every? second (for [q quads
                                                  x q] x))]
                   [expr const])
+    (and (symbol? expr)
+         (not (nil? (resolve expr)))) [@(resolve expr) true]
     :else [expr (not (saturated? expr))]))
 
 (defn compile [[lhs rhs]]
