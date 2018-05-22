@@ -372,22 +372,20 @@ The `if` form translates to a Clojure `if` form.
  (eq/canonicalize '(if true (+ 1 2) 3)) => '(if true (equilibrium.core/+#2 1 2) 3))
 
 ```
-## Variables
+### Clojure Collections
 
-
-
-
-
+`canonicalize` recurses through Clojure collections: vectors, maps
+and sets.
+```clojure
 (fact
- (eq/canonicalize 'Foo) => 'Foo
- (binding [eq/*eq-id* "Bar"]
-   (eq/canonicalize 'Foo) => 'Foo?Bar))
+ (eq/canonicalize '{"one" 1 "two" (+ 1 1)})
+ => '{"one" 1 "two" (equilibrium.core/+#2 1 1)}
+ (eq/canonicalize '[(f X) (f Y)])
+ => '[(equilibrium.core-test/f#1 X) (equilibrium.core-test/f#1 Y)]
+ (eq/canonicalize '#{(f X) (f Y)})
+ => '#{(equilibrium.core-test/f#1 X) (equilibrium.core-test/f#1 Y)})
 
-
-(fact
- (binding [eq/*eq-id* "Quux"]
-   (eq/canonicalize 'Foo?Bar) => 'Foo?Bar))
-
+```
 ## lhs-to-clj
 
 Unlike canonicalize, which translates right-hand-side expressions (i.e.,
@@ -760,5 +758,18 @@ program does not terminate.
 (fact
  (eq/partial-eval (cs '(if (< (f X) 3) (f X) (g X))))
  => [(cs '(if (< (+ X 2) 3) (f X) (g X))) false])
+
 ```
+### Clojure Collections
+
+Partial evaluation operates on Clojure collections by evaluating
+their respective members.
+```clojure
+'(fact
+ (eq/partial-eval (cs '[(f X) (g X)]))
+ => [(cs '[(+ X 2) (+ (+ X 2) 2)]) false])
+
+```
+## Just In Time Compilation
+
 

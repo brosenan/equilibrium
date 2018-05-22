@@ -90,6 +90,10 @@
 
 (defn canonicalize [x]
   (cond (seq? x) (with-meta (form-canonicalize x) (meta x))
+        (map? x) (into {} (for [[k v] x]
+                            [(canonicalize k) (canonicalize v)]))
+        (vector? x) (vec (map canonicalize x))
+        (set? x) (set (map canonicalize x))
         :else x))
 
 (defn lhs-to-clj [pattern]
@@ -316,13 +320,14 @@
       `[(if ~cond ~then ~else) false])))
 
 (defn partial-eval [expr]
-  (if (seq? expr)
-    (if (= (first expr) 'if)
-      (partial-eval-if expr)
-      ;; else
-      (partial-eval-call expr))
-    ;; else
-    [expr (not (saturated? expr))]))
+  (cond
+    (seq? expr) (if (= (first expr) 'if)
+                  (partial-eval-if expr)
+                  ;; else
+                  (partial-eval-call expr))
+    (vector? expr) (let [pairs (map partial-eval expr)]
+                     [(vec (map first pairs)) false])
+    :else [expr (not (saturated? expr))]))
 
 (defn- eq [a b]
   (binding [*eq-id* (uuid)
