@@ -740,7 +740,25 @@ the level of a value.
 The `if` form requires special treatment. If we were to inline both
 _then_ and _else_ branches of the `if` form, we would never
 terminate in cases where `if` is used to check for termination
-conditions in a recursion. For example, consider the `range`
-function defined above. If we do not know the edges of the range
-statically, we will iterate indefenitely.
+conditions in a recursion.
+
+If the condition is known is a constant, the `if` form
+reduces to one of its branches.
+```clojure
+(fact
+ (eq/partial-eval (cs '(if (< 1 2) (f X) (g X))))
+ => [(cs '(+ X 2)) false]
+ (eq/partial-eval (cs '(if (< 2 1) (f X) (g X))))
+ => [(cs '(+ (+ X 2) 2)) false])
+
+```
+If the condition is not a constant, Only the condition is being
+partially evaluated. the two branches are left unchanged. This is
+to avoid a situation when partial-evaluation of a terminating
+program does not terminate.
+```clojure
+(fact
+ (eq/partial-eval (cs '(if (< (f X) 3) (f X) (g X))))
+ => [(cs '(if (< (+ X 2) 3) (f X) (g X))) false])
+```
 
