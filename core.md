@@ -88,7 +88,7 @@ All functions (uniform functions included) are accompanied by two atoms:
 (fact
  @f#1-code => '[(equilibrium.core-test/f#1 X) (equilibrium.core/+#2 X 2)]
  @f#1-comp => fn?
- (@f#1-comp 4) => 6)
+ (@f#1-comp 4) => '(equilibrium.core/return#1 6))
 
 ```
 The compiled function in the `-comp` atom is the only actual
@@ -97,7 +97,7 @@ implementation of the function. The base function (without the
 updated, the meaning of the function changes.
 ```clojure
 (fact
- (reset! f#1-comp (fn [X] (- X 2)))
+ (reset! f#1-comp (fn [X] (eq/return#1 (- X 2))))
  (f#1 3) => 1)
 
 ```
@@ -277,7 +277,7 @@ ones.
 ```clojure
 (def defs (atom []))
 (fact
- (reset! eq/dbg-inject-uuids ["12345" "foo" "bar" "baz"])
+ (reset! eq/dbg-inject-uuids (concat ["12345"] (map str (range 10))))
  (binding [eq/*defs* defs
            eq/*curr-func* (atom #{'adder#1})]
    (eq/replace-abstract [(eq/canonicalize '(adder N))
@@ -432,14 +432,14 @@ not the given one, a `:return` tuple is returned, with the original
 expression as the return value.
 ```clojure
 (fact
- (eq/tre '(+ V (sum R)) 'equilibrium.core-test/sum#1) => '(equilibrium.core/return (+ V (sum R))))
+ (eq/tre '(+ V (sum R)) 'equilibrium.core-test/sum#1) => '(equilibrium.core/return#1 (+ V (sum R))))
 
 ```
 If the top-level is a call to the given function, a `:recur` tuple
 is returned, with the arguments to call on the next iteration.
 ```clojure
 (fact
- (eq/tre '(tre-sum L (+ S V)) 'equilibrium.core-test/tre-sum#2) => '(equilibrium.core/recur [L (+ S V)]))
+ (eq/tre '(tre-sum L (+ S V)) 'equilibrium.core-test/tre-sum#2) => '(equilibrium.core/recur#1 [L (+ S V)]))
 
 ```
 So by calling `tre-sum` we get the same result as we would for
@@ -457,9 +457,9 @@ TRE handles `if` forms by recursing to both cases.
             ;; else
             Y) 'equilibrium.core-test/sum#1)
  => '(if X
-       (equilibrium.core/recur [L])
+       (equilibrium.core/recur#1 [L])
        ;; else
-       (equilibrium.core/return Y)))
+       (equilibrium.core/return#1 Y)))
 
 ```
 ## Unification
@@ -773,9 +773,30 @@ their respective members.
  (eq/partial-eval (cs '{1 2}))
  => [(cs '{1 2}) true]
  (eq/partial-eval (cs '{(f X) (g X)}))
- => [(cs '{(+ X 2) (+ (+ X 2) 2)}) false])
+ => [(cs '{(+ X 2) (+ (+ X 2) 2)}) false]
+ (eq/partial-eval (cs '#{1 2 3}))
+ => [(cs '#{1 2 3}) true]
+ (eq/partial-eval (cs '#{(f X) (g X)}))
+ => [(cs '#{(+ X 2) (+ (+ X 2) 2)}) false])
 
 ```
-## Just In Time Compilation
+## Compilation
 
+Compiling an equation includes two steps:
+1. Partial evaluation of the equation itself, and
+2. Compiling the equation into a Clojure function.
+
+The `compile` function takes a canonical, normalized equation as
+input, and returns a pair `[[lhs rhs] func]`, where `lhs` and `rhs`
+are the left- and right-hand sides of the partially-evaluated
+equation, and `func` is an s-expression containing the Clojure
+definition of a function corresponding to the equation.
+```clojure
+(fact
+ (binding [eq/*curr-func* (atom #{'foo#1})]
+   (let [[eq func] (eq/compile (eq/canonicalize '[(foo X) (sum (list X (list X (empty))))]))
+         func' (eval func)]
+     eq => (eq/canonicalize '[(foo X) (+ X (+ X 0))])
+     (func' 3) => (equilibrium.core/return#1 6))))
+```
 

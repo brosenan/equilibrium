@@ -106,25 +106,113 @@
 
 (defn tre [expr sym]
   (cond
-    (and (seq? expr) (= (canonical-symbol expr) sym)) (list 'equilibrium.core/recur (vec (rest expr)))
+    (and (seq? expr) (= (canonical-symbol expr) sym)) (list 'equilibrium.core/recur#1 (vec (rest expr)))
     (and (seq? expr) (= (first expr) 'if)) (let [[if' cond then else] expr]
                                              (list if' cond (tre then sym) (tre else sym)))
-    :else (list 'equilibrium.core/return expr)))
+    :else (list 'equilibrium.core/return#1 expr)))
+
+(defn saturate [expr]
+  (walk/postwalk #(if (variable? %)
+                    (symbol (str "!SAT!" (name %)))
+                    ;; else
+                    %) expr))
+
+(defn- saturated? [sym]
+  (and (symbol? sym)
+       (str/starts-with? (name sym) "!SAT!")))
+
+(defn unsaturate [expr]
+  (walk/prewalk  #(if (saturated? %)
+                    (symbol (subs (name %) 5))
+                    ;; else
+                    %) expr))
+
+(declare partial-eval)
+
+(defn- partial-eval-call [form]
+  (let [[f & args] form
+        pairs (map partial-eval args)
+        form (cons f (for [[expr const] pairs]
+                       expr))
+        const (every? second pairs)
+        code-sym (symbol (namespace f) (str (name f) "-code"))
+        code-var (resolve code-sym)]
+    (if const
+      [(eval form) true]
+      ;; else
+      (if (nil? code-var)
+        [form const]
+        ;; else
+        (let [code @@code-var
+              equation (cond
+                         (vector? code) code
+                         (and (seq? (first args))
+                              (map? code)) (code (-> args first first))
+                         :else nil)]
+          (if (nil? equation)
+            [form const]
+            ;; else
+            (let [[lhs rhs] equation
+                  binds (unify lhs form)]
+              (partial-eval (subst rhs binds)))))))))
+
+(defn- partial-eval-if [[_if cond then else]]
+  (let [[cond known] (partial-eval cond)]
+    (if known
+      (if cond
+        (partial-eval then)
+        ;; else
+        (partial-eval else))
+      ;; else
+      `[(if ~cond ~then ~else) false])))
+
+(defn partial-eval [expr]
+  (cond
+    (seq? expr) (if (= (first expr) 'if)
+                  (partial-eval-if expr)
+                  ;; else
+                  (partial-eval-call expr))
+    (vector? expr) (let [pairs (map partial-eval expr)]
+                     [(vec (map first pairs)) (every? second pairs)])
+    (set? expr) (let [pairs (map partial-eval expr)]
+                     [(set (map first pairs)) (every? second pairs)])
+    (map? expr) (let [quads (for [[k v] expr]
+                              [(partial-eval k) (partial-eval v)])
+                      expr (into {} (for [[[k kc] [v vc]] quads]
+                                      [k v]))
+                      const (every? second (for [q quads
+                                                 x q] x))]
+                  [expr const])
+    :else [expr (not (saturated? expr))]))
+
+(defn compile [[lhs rhs]]
+  (let [rhs (-> rhs saturate partial-eval first unsaturate)]
+    [[lhs rhs] `(fn ~(lhs-to-clj (rest lhs)) ~(tre rhs (first lhs)))]))
 
 (data (return ?val)
       (recur ?args))
 
 (defn- uniform-func [a b name]
-  `(do
-     (declare ~(name ""))
-     (def ~(name "-code") (atom '~[a b]))
-     (def ~(name "-comp") (atom (fn [~@(lhs-to-clj (rest a))] ~b)))
-     (defn ~(name "") [~@(rest a)] ~(cons `(deref ~(name "-comp")) (rest a)))))
+  (let [dummy-args (vec (for [i (range (count (rest a)))]
+                              (symbol (str "$" i))))
+        [eq func] (compile [a b])]
+    `(do
+       (declare ~(name ""))
+       (def ~(name "-code") (atom '~eq))
+       (def ~(name "-comp") (atom ~func))
+       (defn ~(name "") [~@(rest a)]
+         (let [[op# val#] ~(cons `(deref ~(name "-comp")) (rest a))]
+           (cond
+             (= op# 'equilibrium.core/return#1) val#
+             (= op# 'equilibrium.core/recur#1)
+             (let [~dummy-args val#]
+               (recur ~@dummy-args))))))))
 
 (defn- polymorphic-func [a b name]
   (let [dummy-args (vec (for [i (range (count (rest a)))]
                               (symbol (str "$" i))))
-        [key & args] dummy-args]
+        [key & args] dummy-args
+        [eq func] (compile [a b])]
     `(do
        ~(when (nil? (resolve (name "")))
           `(do
@@ -140,10 +228,8 @@
                      (= op# 'equilibrium.core/recur#1)
                      (let [~dummy-args val#]
                        (recur ~@dummy-args))))))))
-       (swap! ~(name "-code") assoc '~(-> a second canonicalize first) '~[(canonicalize a) (canonicalize b)])
-       (swap! ~(name "-comp") assoc '~(-> a second canonicalize first)
-              (fn ~(lhs-to-clj (rest a))
-                ~(-> b (tre (canonical-symbol a)) canonicalize))))))
+       (swap! ~(name "-code") assoc '~(-> a second canonicalize first) '~eq)
+       (swap! ~(name "-comp") assoc '~(-> a second canonicalize first) ~func))))
 
 
 (defmacro abstract [form & eqs]
@@ -263,78 +349,6 @@
     ;; else
     (let [func-name-arity (str (-> a first name) "#" (count (rest a)))]
       #{(symbol func-name-arity)})))
-
-(defn saturate [expr]
-  (walk/postwalk #(if (variable? %)
-                    (symbol (str "!SAT!" (name %)))
-                    ;; else
-                    %) expr))
-
-(defn- saturated? [sym]
-  (and (symbol? sym)
-       (str/starts-with? (name sym) "!SAT!")))
-
-(defn unsaturate [expr]
-  (walk/prewalk  #(if (saturated? %)
-                    (symbol (subs (name %) 5))
-                    ;; else
-                    %) expr))
-
-(declare partial-eval)
-
-(defn- partial-eval-call [form]
-  (let [[f & args] form
-        pairs (map partial-eval args)
-        form (cons f (for [[expr const] pairs]
-                       expr))
-        const (every? second pairs)
-        code-sym (symbol (namespace f) (str (name f) "-code"))
-        code-var (resolve code-sym)]
-    (if const
-      [(eval form) true]
-      ;; else
-      (if (nil? code-var)
-        [form const]
-        ;; else
-        (let [code @@code-var
-              equation (cond
-                         (vector? code) code
-                         (and (seq? (first args))
-                              (map? code)) (code (-> args first first))
-                         :else nil)]
-          (if (nil? equation)
-            [form const]
-            ;; else
-            (let [[lhs rhs] equation
-                  binds (unify lhs form)]
-              (partial-eval (subst rhs binds)))))))))
-
-(defn- partial-eval-if [[_if cond then else]]
-  (let [[cond known] (partial-eval cond)]
-    (if known
-      (if cond
-        (partial-eval then)
-        ;; else
-        (partial-eval else))
-      ;; else
-      `[(if ~cond ~then ~else) false])))
-
-(defn partial-eval [expr]
-  (cond
-    (seq? expr) (if (= (first expr) 'if)
-                  (partial-eval-if expr)
-                  ;; else
-                  (partial-eval-call expr))
-    (vector? expr) (let [pairs (map partial-eval expr)]
-                     [(vec (map first pairs)) (every? second pairs)])
-    (map? expr) (let [quads (for [[k v] expr]
-                              [(partial-eval k) (partial-eval v)])
-                      expr (into {} (for [[[k kc] [v vc]] quads]
-                                      [k v]))
-                      const (every? second (for [q quads
-                                                 x q] x))]
-                  [expr const])
-    :else [expr (not (saturated? expr))]))
 
 (defn- eq [a b]
   (binding [*eq-id* (uuid)
