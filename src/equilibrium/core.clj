@@ -305,9 +305,22 @@
                   binds (unify lhs form)]
               (partial-eval (subst rhs binds)))))))))
 
+(defn- partial-eval-if [[_if cond then else]]
+  (let [[cond known] (partial-eval cond)]
+    (if known
+      (if cond
+        (partial-eval then)
+        ;; else
+        (partial-eval else))
+      ;; else
+      `[(if ~cond ~then ~else) false])))
+
 (defn partial-eval [expr]
   (if (seq? expr)
-    (partial-eval-call expr)
+    (if (= (first expr) 'if)
+      (partial-eval-if expr)
+      ;; else
+      (partial-eval-call expr))
     ;; else
     [expr (not (saturated? expr))]))
 
