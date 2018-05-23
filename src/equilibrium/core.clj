@@ -191,6 +191,14 @@
   (let [rhs (-> rhs saturate partial-eval first unsaturate)]
     [[lhs rhs] `(fn ~(lhs-to-clj (rest lhs)) ~(tre rhs (first lhs)))]))
 
+(defn jit [eq set-eq set-fn]
+  (let [[eq func] (compile eq)
+        func (eval func)]
+    (fn [& args]
+      (set-eq eq)
+      (set-fn func)
+      (apply func args))))
+
 (data (return ?val)
       (recur ?args))
 
