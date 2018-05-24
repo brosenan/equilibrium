@@ -204,12 +204,13 @@
 
 (defn- uniform-func [a b name]
   (let [dummy-args (vec (for [i (range (count (rest a)))]
-                              (symbol (str "$" i))))
-        [eq func] (compile [a b])]
+                              (symbol (str "$" i))))]
     `(do
        (declare ~(name ""))
-       (def ~(name "-code") (atom '~eq))
-       (def ~(name "-comp") (atom ~func))
+       (def ~(name "-code") (atom '~[a b]))
+       (def ~(name "-comp") (atom (jit '~[a b]
+                                       (partial reset! ~(name "-code"))
+                                       (partial reset! ~(name "-comp")))))
        (defn ~(name "") [~@(rest a)]
          (let [[op# val#] ~(cons `(deref ~(name "-comp")) (rest a))]
            (cond
@@ -221,8 +222,7 @@
 (defn- polymorphic-func [a b name]
   (let [dummy-args (vec (for [i (range (count (rest a)))]
                               (symbol (str "$" i))))
-        [key & args] dummy-args
-        [eq func] (compile [a b])]
+        [key & args] dummy-args]
     `(do
        ~(when (nil? (resolve (name "")))
           `(do
@@ -238,8 +238,11 @@
                      (= op# 'equilibrium.core/recur#1)
                      (let [~dummy-args val#]
                        (recur ~@dummy-args))))))))
-       (swap! ~(name "-code") assoc '~(-> a second canonicalize first) '~eq)
-       (swap! ~(name "-comp") assoc '~(-> a second canonicalize first) ~func))))
+       (swap! ~(name "-code") assoc '~(-> a second canonicalize first) '~[a b])
+       (swap! ~(name "-comp") assoc '~(-> a second canonicalize first)
+              (jit '~[a b]
+                   (partial swap! ~(name "-code") assoc '~(-> a second canonicalize first))
+                   (partial swap! ~(name "-comp") assoc '~(-> a second canonicalize first)))))))
 
 
 (defmacro abstract [form & eqs]
@@ -363,22 +366,22 @@
 (defn- eq [a b]
   (binding [*eq-id* (uuid)
             *curr-func* (atom (curr-func a))]
+    (when-not (seq? a)
+      (throw (Exception. (str "The left-hand-side of an equation needs to be a form. Found: " a))))
     (let [b (canonicalize b)
           defs (atom [])
           [a b] (binding [*defs* defs]
                   (replace-abstract [a b]))]
       `(do
          ~@ @defs
-        ~(if (symbol? a)
-           `(def ~a ~b)
-           ;; else
-           (let [a (canonicalize a)]
-             (let [name (fn [suff]
-                          (symbol (str (-> a first name) suff)))]
-               (if (variable? (second a))
-                 (uniform-func a b name)
-                 ;; else
-                 (polymorphic-func a b name)))))))))
+        ~(let [a (canonicalize a)]
+           (let [name (fn [suff]
+                        (symbol (str (-> a first name) suff)))]
+             (if (or (= (count a) 1)
+                     (variable? (second a)))
+               (uniform-func a b name)
+               ;; else
+               (polymorphic-func a b name))))))))
 
 ;; Standatd library
 (defn +#2 [a b]

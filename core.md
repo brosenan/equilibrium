@@ -39,16 +39,31 @@ added as suffix.
 
 ```
 # Equations
-Equations are defined using the eq/= form.
+
+Equations are defined using the eq/= form. Equations define
+_functions_, which, like Clojure functions are enclosed in a
+list. Unlike Clojure, in which functions are defined using special
+forms, in Equilibrium, functions are defined using equations, where
+an "invocation" of the function appears on the left-hand-side, and
+its meaning appears on the right-hand side.
 
 ## Constants
 
-When the left-hand-side of an equation is a symbol, the equation
-defines this symbol, similar to a Clojure def.
+Functions may take zero or more arguments. The number of arguments
+is considered the function's arity. Functions with arity of zero
+are considered constants.
+
+For example, the following equation defines the constant `x` to be
+2.
 ```clojure
-(eq/= x 2)
+(eq/= (x) 2)
+
+```
+Equilibrium functions can be called from Clojure by adding their
+arity to their name, delimited by a `#`.
+```clojure
 (fact
- x => 2)
+ (x#0) => 2)
 
 ```
 ## Uniform Functions
@@ -197,20 +212,20 @@ For example, by defining the equation:
 ```
 we actually define a higher-order function, so that if we define:
 ```clojure
-(eq/= my-inc (adder 1))
+(eq/= (my-inc) (adder 1))
 ```
 `my-inc` becomes a function on which we can call `apply`, to add 1
 to a number.
 ```clojure
 (fact
- (apply#2 my-inc 3) => 4)
+ (apply#2 (my-inc#0) 3) => 4)
 
 ```
 This can also be done directly:
 ```clojure
-(eq/= my-dec (lambda X (+ X -1)))
+(eq/= (my-dec) (lambda X (+ X -1)))
 (fact
- (apply#2 my-dec 5) => 4)
+ (apply#2 (my-dec#0) 5) => 4)
 
 
 ```
@@ -739,7 +754,7 @@ Symbols that are not saturated variables can be taken as Clojure
 variables. if they are, we can replace them by their values.
 ```clojure
 (fact
- (eq/partial-eval (cs 'x)) => [2 true])
+ (eq/partial-eval (cs '(x))) => [2 true])
 
 ```
 ### Conditionals
@@ -890,12 +905,12 @@ Now we can define operations. For example, the `even` operation
 which multiplies by 2, and the `odd` operation multiples a number
 by 2, and then adds 1.
 ```clojure
-(eq/= even (* 2))
-(eq/= odd (seq (* 2) (+ 1)))
-(eq/= ten (seq odd ;; 10(dec) = 1010(bin)
-               (seq even
-                    (seq odd
-                         even))))
+(eq/= (even) (* 2))
+(eq/= (odd) (seq (* 2) (+ 1)))
+(eq/= (ten) (seq (odd) ;; 10(dec) = 1010(bin)
+                 (seq (even)
+                      (seq (odd)
+                           (even)))))
 
 ```
 We can evaluate this DSL by using its semanic function. We will
@@ -903,7 +918,7 @@ call it from Clojure, by adding the `#` suffix.
 
 ```clojure
 (fact
- (apply-op#2 ten 0) => 10)
+ (apply-op#2 (ten#0) 0) => 10)
 
 ```
 Although this DSL is relatively high-level, when we define a
@@ -911,8 +926,11 @@ function that uses its code (in this case, the `ten` "program" we
 defined earlier), the generated code is reduced to plain
 Equilibrium code, and the DSL layer disappears.
 ```clojure
-(eq/= (apply-ten-to N) (apply-op ten N))
+(eq/= (apply-ten-to N) (apply-op (ten) N))
 (fact
+ ;; Partial evaluation is only done after the function has been called
+ ;; once, due to JIT compilation.
+ (apply-ten-to#1 0) => 10
  @apply-ten-to#1-code =>
  '[(equilibrium.core-test/apply-ten-to#1 N)
    (equilibrium.core/*#2
