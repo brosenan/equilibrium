@@ -208,9 +208,10 @@
     `(do
        (declare ~(name ""))
        (def ~(name "-code") (atom '~[a b]))
-       (def ~(name "-comp") (atom (jit '~[a b]
-                                       (partial reset! ~(name "-code"))
-                                       (partial reset! ~(name "-comp")))))
+       (def ~(name "-comp") (atom nil))
+       (reset! ~(name "-comp") (jit '~[a b]
+                                    (partial reset! ~(name "-code"))
+                                    (partial reset! ~(name "-comp"))))
        (defn ~(name "") [~@(rest a)]
          (let [[op# val#] ~(cons `(deref ~(name "-comp")) (rest a))]
            (cond
